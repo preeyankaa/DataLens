@@ -1,0 +1,6 @@
+customer_id,customer_age,sales_amount,city
+101,24,1500,Mumbai
+102,32,2300,Pune
+103,29,1800,Nashik
+104,41,3200,Mumbai
+105,35,2700,Thane
