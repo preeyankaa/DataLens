@@ -1,7 +1,13 @@
 
 from io import BytesIO
+from uuid import uuid4
 from app.profiling import profile_dataframe
+from app.quality import check_data_quality
 
+from fastapi import Body
+from fastapi.responses import StreamingResponse
+
+from app.cleaning import clean_dataframe
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
@@ -91,22 +97,14 @@ async def upload_csv(file: UploadFile = File(...)):
 
     profile = profile_dataframe(df)
 
+    quality_report = check_data_quality(
+        df,
+        non_negative_columns=["customer_age", "quantity"],
+    )
+
     return {
         "filename": file.filename,
         "status": "success",
         "profile": profile,
-    }
-
-    # 6. Return the dataset information
-    return {
-        "filename": file.filename,
-        "rows": len(df),
-        "columns": len(df.columns),
-        "column_names": df.columns.tolist(),
-        "data_types": {
-            str(column): str(dtype)
-            for column, dtype in df.dtypes.items()
-        },
-        "preview": preview_rows,
-        "status": "success",
+        "quality_report": quality_report,
     }
