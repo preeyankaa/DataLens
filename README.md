@@ -5,7 +5,7 @@ DataLens is an AI-powered Data Quality & Analytics Copilot that helps users uplo
 ### Tech Stack
 - Python, FastAPI
 - Pandas, NumPy
-- React, TypeScriptt
+- React, TypeScript
 
 ### Features
 - CSV upload and analysis
