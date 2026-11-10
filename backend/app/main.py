@@ -11,6 +11,7 @@ from app.profiling import profile_dataframe
 from app.quality import check_data_quality
 from app.cleaning import clean_dataframe
 
+from fastapi.middleware.cors import CORSMiddleware
 
 # --------------------------------------------------
 # 1. FastAPI application
@@ -20,6 +21,17 @@ app = FastAPI(
     title="DataLens API",
     description="AI-powered Data Quality and Analytics Copilot",
     version="0.3.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5174",
+        "http://localhost:5174",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
