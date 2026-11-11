@@ -2,7 +2,7 @@
 
 **AI-Powered Data Quality & Analytics Copilot**
 
-DataLens is a data quality and analytics application that helps users upload, analyze, and clean CSV datasets. It automatically profiles datasets, identifies common data quality issues, and provides cleaning options to prepare data for further analysis.
+DataLens is an AI-powered data quality and analytics application that helps users upload, analyze, and clean CSV datasets. It automatically profiles datasets, identifies common data quality issues, and provides cleaning options. It also allows users to ask questions about their datasets using natural language.
 
 ## 🚀 Features
 
@@ -11,9 +11,13 @@ DataLens is a data quality and analytics application that helps users upload, an
 - **Data Quality Analysis:** Identify missing values, duplicate records, potential outliers, negative values, and invalid dates.
 - **Column Statistics:** Explore data types, unique values, and numerical statistics.
 - **Data Preview:** View sample records from the uploaded dataset.
-- **Data Cleaning:** Handle missing values, remove duplicate rows, and apply IQR-based outlier clipping.
-- **Cleaning Preview:** Compare dataset statistics before and after cleaning.
-- **Cleaned CSV Download:** Download the processed dataset without modifying the original uploaded file.
+- **Data Cleaning:** Handle missing values, remove duplicate rows, standardize dates, convert data types, and apply IQR-based outlier clipping.
+- **Cleaning Preview:** Preview cleaning operations and compare dataset statistics before and after cleaning.
+- **Apply Cleaning:** Apply selected cleaning operations and save a separate cleaned version without modifying the original dataset.
+- **Cleaned CSV Download:** Download the processed dataset.
+- **AI-Powered Q&A:** Ask natural language questions about the uploaded dataset.
+- **Original & Cleaned Dataset Analysis:** Ask questions about both original and cleaned versions of the dataset.
+- **Context-Based AI Answers:** Generate answers using actual dataset statistics with the Groq API.
 
 ## 🛠️ Tech Stack
 
@@ -22,6 +26,7 @@ DataLens is a data quality and analytics application that helps users upload, an
 - FastAPI
 - Pandas
 - NumPy
+- Groq API
 
 **Frontend**
 - React
@@ -29,6 +34,7 @@ DataLens is a data quality and analytics application that helps users upload, an
 - Vite
 - CSS
 - Lucide React
+- React Markdown
 
 **Tools**
 - Git & GitHub
@@ -43,23 +49,24 @@ DataLens/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
-│   │   └── ...
+│   │   ├── profiling.py
+│   │   ├── quality.py
+│   │   ├── cleaning.py
+│   │   ├── data_analysis.py
+│   │   └── ai_service.py
+│   │
 │   ├── requirements.txt
+│   ├── .env
 │   └── ...
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Navbar.jsx
-│   │   │   ├── Hero.jsx
-│   │   │   ├── UploadSection.jsx
-│   │   │   ├── DatasetPreview.jsx
-│   │   │   ├── DatasetOverview.jsx
-│   │   │   ├── CleaningSection.jsx
-│   │   │   └── ContentSections.jsx
+│   │   ├── pages/
 │   │   ├── App.jsx
 │   │   ├── App.css
 │   │   └── main.jsx
+│   │
 │   ├── package.json
 │   └── ...
 │
@@ -100,6 +107,7 @@ python -m venv .venv
 Activate it:
 
 **Windows:**
+
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
@@ -108,6 +116,13 @@ Install dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+Create a `.env` file inside the backend directory:
+
+```env
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=openai/gpt-oss-20b
 ```
 
 Start the FastAPI server:
@@ -157,43 +172,51 @@ http://127.0.0.1:5174
 ## 🔄 Application Workflow
 
 1. Upload a CSV dataset.
-2. Generate a dataset profile.
-3. Review data quality metrics and detected issues.
+2. Generate a dataset profile and view data quality metrics.
+3. Review detected issues such as missing values, duplicates, and outliers.
 4. Select the required cleaning operations.
-5. Preview the changes before downloading.
-6. Download the cleaned CSV dataset.
+5. Preview the changes before applying them.
+6. Apply cleaning to generate a separate cleaned dataset.
+7. Download the cleaned CSV file.
+8. Ask questions about the original or cleaned dataset using the AI assistant.
 
 ## 🧹 Supported Data Cleaning Operations
 
 | Operation | Description |
 |---|---|
-| Missing Value Handling | Fill missing values using Mean, Median, or Mode |
+| Missing Value Handling | Fill missing values using Mean, Median, Mode, or a constant value |
 | Duplicate Removal | Remove duplicate records |
+| Date Standardization | Standardize selected date columns |
+| Data Type Conversion | Convert columns to integer, float, string, or datetime |
 | Outlier Handling | Apply IQR-based clipping to selected numerical columns |
 | Cleaning Preview | Compare dataset statistics before and after cleaning |
+| Apply Cleaning | Save the cleaned dataset separately from the original |
 | CSV Export | Download the cleaned dataset |
 
-## 🗺️ Project Roadmap
+## 🤖 AI-Powered Dataset Q&A
 
-- [x] FastAPI backend setup
-- [x] CSV upload API
-- [x] Dataset profiling and quality checks
-- [x] Data cleaning preview API
-- [x] Cleaned CSV download API
-- [x] React frontend setup
-- [x] Frontend and backend integration
-- [x] Dataset overview interface
-- [x] Data cleaning interface
-- [ ] Interactive charts and visual analytics
-- [ ] AI-powered dataset Q&A
-- [ ] RAG-based data insights
-- [ ] User authentication
-- [ ] PostgreSQL integration
-- [ ] AWS deployment
+DataLens integrates the Groq API to provide natural language question answering.
+
+Users can ask questions such as:
+
+- How many missing values are present in the dataset?
+- Which columns contain missing values?
+- What is the average value of a numerical column?
+- What are the key statistics of this dataset?
+
+The application uses Pandas to calculate dataset statistics and provides the relevant context to the AI assistant to generate natural language answers.
+
+## 🗺️ Future Improvements
+
+- Interactive charts and visual analytics.
+- RAG-based data insights for more advanced dataset exploration.
+- User authentication and account management.
+- PostgreSQL integration for persistent dataset storage.
+- AWS deployment.
 
 ## 🎯 Project Goal
 
-The goal of DataLens is to simplify the data preparation process by bringing dataset profiling, quality analysis, cleaning, and analytics into one application.
+The goal of DataLens is to simplify the data preparation and analysis process by bringing dataset profiling, data quality checks, cleaning, and AI-powered question answering into one application.
 
 ---
 
