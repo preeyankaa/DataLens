@@ -1,4 +1,3 @@
-
 import json
 from io import BytesIO
 from uuid import uuid4
@@ -11,7 +10,21 @@ from app.profiling import profile_dataframe
 from app.quality import check_data_quality
 from app.cleaning import clean_dataframe
 
+from pydantic import BaseModel
+from app.ai_service import ask_groq
+from app.data_analysis import build_dataset_context
+
 from fastapi.middleware.cors import CORSMiddleware
+
+
+
+class QuestionRequest(BaseModel):
+    question: str
+    version: str = "original"
+    history: list[dict[str, str]] = []
+
+
+
 
 # --------------------------------------------------
 # 1. FastAPI application
@@ -41,10 +54,11 @@ app.add_middleware(
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
-# Temporary in-memory storage for uploaded datasets.
-# Each dataset is stored using a unique ID.
+# Store original uploaded datasets
 datasets = {}
 
+# Store cleaned versions separately
+cleaned_datasets = {}
 
 # --------------------------------------------------
 # 3. Home and health-check endpoints
@@ -221,8 +235,136 @@ def preview_cleaning(
     }
 
 
+
 # --------------------------------------------------
-# 6. Download cleaned CSV endpoint
+# 6. Apply cleaning and save cleaned dataset
+# --------------------------------------------------
+
+@app.post("/api/v1/datasets/{dataset_id}/clean/apply")
+def apply_cleaning(
+    dataset_id: str,
+    operations: dict = Body(...),
+):
+
+    # Check whether original dataset exists
+    if dataset_id not in datasets:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again.",
+        )
+
+    # Get original dataset
+    original_df = datasets[dataset_id]
+
+    try:
+        # Clean a copy of the original dataset
+        cleaned_df, changes = clean_dataframe(
+            original_df,
+            operations,
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        )
+
+    except (TypeError, KeyError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid cleaning configuration: {error}",
+        )
+
+    # Save cleaned version separately
+    cleaned_datasets[dataset_id] = cleaned_df.copy(deep=True)
+
+    # Calculate statistics
+    return {
+        "dataset_id": dataset_id,
+        "status": "success",
+        "message": "Cleaning applied successfully.",
+        "before": {
+            "rows": len(original_df),
+            "columns": len(original_df.columns),
+            "missing_values": int(original_df.isna().sum().sum()),
+            "duplicate_rows": int(original_df.duplicated().sum()),
+        },
+        "after": {
+            "rows": len(cleaned_df),
+            "columns": len(cleaned_df.columns),
+            "missing_values": int(cleaned_df.isna().sum().sum()),
+            "duplicate_rows": int(cleaned_df.duplicated().sum()),
+        },
+        "changes": changes,
+    }
+
+
+
+# --------------------------------------------------
+# 7. Retrieve original or cleaned dataset
+# --------------------------------------------------
+
+@app.get("/api/v1/datasets/{dataset_id}/versions/{version}")
+def get_dataset_version(
+    dataset_id: str,
+    version: str,
+):
+
+    # Check whether original dataset exists
+    if dataset_id not in datasets:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again.",
+        )
+
+    # Select requested dataset version
+    if version == "original":
+        df = datasets[dataset_id]
+
+    elif version == "cleaned":
+        if dataset_id not in cleaned_datasets:
+            raise HTTPException(
+                status_code=404,
+                detail="Cleaned dataset not available. Apply cleaning first.",
+            )
+
+        df = cleaned_datasets[dataset_id]
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Version must be 'original' or 'cleaned'.",
+        )
+
+    # Calculate dataset statistics
+    statistics = {
+        "rows": len(df),
+        "columns": len(df.columns),
+        "missing_values": int(df.isna().sum().sum()),
+        "duplicate_rows": int(df.duplicated().sum()),
+    }
+
+    # Generate a small data preview
+    preview = json.loads(
+        df.head(5).to_json(
+            orient="records",
+            date_format="iso",
+        )
+    )
+
+    return {
+        "dataset_id": dataset_id,
+        "version": version,
+        "status": "success",
+        "statistics": statistics,
+        "column_names": df.columns.tolist(),
+        "preview": preview,
+    }
+
+
+
+# --------------------------------------------------
+# 8. Download cleaned CSV endpoint
 # --------------------------------------------------
 
 @app.post("/api/v1/datasets/{dataset_id}/clean/download")
@@ -275,3 +417,55 @@ def download_cleaned_csv(
             "X-Original-Rows": str(len(original_df)),
         },
     )
+
+@app.post("/api/v1/datasets/{dataset_id}/ask")
+def ask_dataset_question(dataset_id: str, request: QuestionRequest):
+
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+
+    if request.version == "original":
+        df = datasets[dataset_id]
+
+    elif request.version == "cleaned":
+        if dataset_id not in cleaned_datasets:
+            raise HTTPException(
+                status_code=404,
+                detail="Cleaned dataset not available."
+            )
+        df = cleaned_datasets[dataset_id]
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Version must be original or cleaned."
+        )
+
+    if not request.question.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty."
+        )
+
+    try:
+        context = build_dataset_context(df)
+
+        answer = ask_groq(
+            question=request.question,
+            context=context,
+            history=request.history
+        )
+
+        return {
+            "dataset_id": dataset_id,
+            "version": request.version,
+            "question": request.question,
+            "answer": answer,
+            "status": "success"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to answer question: {str(e)}"
+        )

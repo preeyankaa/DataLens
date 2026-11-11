@@ -44,7 +44,11 @@ function CleaningSection({ datasetId, profile }) {
 
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [downloading, setDownloading] = useState(false);
+
+  const [cleanedReady, setCleanedReady] = useState(false);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -66,6 +70,13 @@ function CleaningSection({ datasetId, profile }) {
     };
   };
 
+  const resetCleaningStatus = () => {
+    setPreview(null);
+    setCleanedReady(false);
+    setSuccess("");
+    setError("");
+  };
+
   const handleMissingToggle = (name) => {
     setSelectedMissing((current) => ({
       ...current,
@@ -75,8 +86,7 @@ function CleaningSection({ datasetId, profile }) {
       },
     }));
 
-    setPreview(null);
-    setSuccess("");
+    resetCleaningStatus();
   };
 
   const handleStrategyChange = (name, strategy) => {
@@ -88,8 +98,7 @@ function CleaningSection({ datasetId, profile }) {
       },
     }));
 
-    setPreview(null);
-    setSuccess("");
+    resetCleaningStatus();
   };
 
   const handleOutlierToggle = (name) => {
@@ -99,8 +108,7 @@ function CleaningSection({ datasetId, profile }) {
         : [...current, name]
     );
 
-    setPreview(null);
-    setSuccess("");
+    resetCleaningStatus();
   };
 
   const handlePreview = async () => {
@@ -108,6 +116,7 @@ function CleaningSection({ datasetId, profile }) {
     setError("");
     setSuccess("");
     setPreview(null);
+    setCleanedReady(false);
 
     try {
       const response = await fetch(
@@ -139,6 +148,45 @@ function CleaningSection({ datasetId, profile }) {
     }
   };
 
+  // Save the cleaned dataset in the backend
+  const handleApplyCleaning = async () => {
+    setApplying(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/datasets/${datasetId}/clean/apply`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(buildPayload()),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Could not apply cleaning."
+        );
+      }
+
+      setCleanedReady(true);
+      setSuccess(
+        "Cleaning applied successfully. Your cleaned dataset is ready for AI questions."
+      );
+    } catch (err) {
+      setError(err.message || "Could not apply cleaning.");
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const handleDownload = async () => {
     setDownloading(true);
     setError("");
@@ -165,7 +213,7 @@ function CleaningSection({ datasetId, profile }) {
             message = data.detail;
           }
         } catch {
-          // Keep the default error message.
+          // Keep default error message.
         }
 
         throw new Error(message);
@@ -197,7 +245,7 @@ function CleaningSection({ datasetId, profile }) {
         <h2>Clean your dataset</h2>
         <p>
           Choose how you want to handle data quality issues.
-          Preview the changes before downloading your cleaned file.
+          Preview the changes before applying them to your dataset.
         </p>
       </div>
 
@@ -215,8 +263,7 @@ function CleaningSection({ datasetId, profile }) {
                 checked={removeDuplicates}
                 onChange={(e) => {
                   setRemoveDuplicates(e.target.checked);
-                  setPreview(null);
-                  setSuccess("");
+                  resetCleaningStatus();
                 }}
               />
               <span />
@@ -239,9 +286,7 @@ function CleaningSection({ datasetId, profile }) {
                   />
                   <span>
                     <strong>{name}</strong>
-                    <small>
-                      {details.missing_count} missing values
-                    </small>
+                    <small>{details.missing_count} missing values</small>
                   </span>
                 </label>
 
@@ -306,7 +351,7 @@ function CleaningSection({ datasetId, profile }) {
             className="primary-button"
             type="button"
             onClick={handlePreview}
-            disabled={loading}
+            disabled={loading || applying}
           >
             {loading ? (
               <>
@@ -322,7 +367,7 @@ function CleaningSection({ datasetId, profile }) {
           </button>
 
           <p className="cleaning-note">
-            Previewing does not download or overwrite your original file.
+            Previewing does not overwrite your original dataset.
           </p>
         </div>
       </div>
@@ -347,9 +392,12 @@ function CleaningSection({ datasetId, profile }) {
             <div>
               <span className="eyebrow">PREVIEW RESULTS</span>
               <h3>Before and after cleaning</h3>
-              <p>Review the changes before downloading your file.</p>
+              <p>Review the changes before applying them.</p>
             </div>
-            <span className="dataset-status">Preview ready</span>
+
+            <span className="dataset-status">
+              {cleanedReady ? "Cleaning applied" : "Preview ready"}
+            </span>
           </div>
 
           <div className="cleaning-comparison">
@@ -396,6 +444,7 @@ function CleaningSection({ datasetId, profile }) {
           {preview.preview?.length > 0 && (
             <div className="detail-card">
               <h3>Cleaned data preview</h3>
+
               <div className="table-scroll">
                 <table className="dataset-table">
                   <thead>
@@ -405,6 +454,7 @@ function CleaningSection({ datasetId, profile }) {
                       ))}
                     </tr>
                   </thead>
+
                   <tbody>
                     {preview.preview.map((row, index) => (
                       <tr key={index}>
@@ -419,15 +469,47 @@ function CleaningSection({ datasetId, profile }) {
             </div>
           )}
 
-          <button
-            className="primary-button download-cleaned-button"
-            type="button"
-            onClick={handleDownload}
-            disabled={downloading}
-          >
-            <Download size={18} />
-            {downloading ? "Preparing download..." : "Download cleaned CSV"}
-          </button>
+          <div className="cleaning-buttons">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={handleApplyCleaning}
+              disabled={applying || cleanedReady}
+            >
+              {applying ? (
+                <>
+                  <RefreshCw size={17} className="spin-icon" />
+                  Applying cleaning...
+                </>
+              ) : cleanedReady ? (
+                <>
+                  <CheckCircle2 size={17} />
+                  Cleaning applied
+                </>
+              ) : (
+                <>
+                  <WandSparkles size={17} />
+                  Apply cleaning
+                </>
+              )}
+            </button>
+
+            <button
+              className="primary-button download-cleaned-button"
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              <Download size={18} />
+              {downloading ? "Preparing download..." : "Download cleaned CSV"}
+            </button>
+          </div>
+
+          {cleanedReady && (
+            <p className="cleaning-note">
+              Your cleaned dataset is saved and available in AI Questions.
+            </p>
+          )}
         </div>
       )}
     </section>

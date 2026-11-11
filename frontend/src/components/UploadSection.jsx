@@ -1,21 +1,16 @@
-import DatasetOverview from "./DatasetOverview";
-import CleaningSection from "./CleaningSection";
 
 import { useRef, useState } from "react";
 import { UploadCloud, FileSpreadsheet, ArrowRight } from "lucide-react";
 
-
-function UploadSection() {
+function UploadSection({ onUploadSuccess }) {
   const fileInputRef = useRef(null);
 
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState(null);
 
   const handleFile = (selectedFile) => {
     setError("");
-    setResult(null);
 
     if (!selectedFile) return;
 
@@ -42,7 +37,6 @@ function UploadSection() {
 
     setLoading(true);
     setError("");
-    setResult(null);
 
     try {
       const formData = new FormData();
@@ -62,7 +56,11 @@ function UploadSection() {
         throw new Error(data.detail || "Upload failed. Please try again.");
       }
 
-      setResult(data);
+      onUploadSuccess({
+        ...data,
+        filename: file.name,
+      });
+
     } catch (err) {
       setError(
         err.message === "Failed to fetch"
@@ -95,7 +93,9 @@ function UploadSection() {
         </div>
 
         <h3>Upload your CSV file</h3>
-        <p>Drag and drop your file here, or select it from your computer.</p>
+        <p>
+          Drag and drop your file here, or select it from your computer.
+        </p>
 
         <input
           ref={fileInputRef}
@@ -113,17 +113,19 @@ function UploadSection() {
           Choose CSV file
         </button>
 
-        <p className="upload-note">CSV format · Maximum size: 10 MB</p>
+        <p className="upload-note">
+          CSV format · Maximum size: 10 MB
+        </p>
 
         {file && (
           <div className="selected-file">
             <FileSpreadsheet size={20} />
             <span>{file.name}</span>
+
             <button
               type="button"
               onClick={() => {
                 setFile(null);
-                setResult(null);
                 setError("");
                 fileInputRef.current.value = "";
               }}
@@ -146,17 +148,6 @@ function UploadSection() {
         )}
 
         {error && <p className="upload-error">{error}</p>}
-
-        {result && (
-        <>
-            <DatasetOverview profile={result.profile} />
-
-            <CleaningSection
-            datasetId={result.dataset_id}
-            profile={result.profile}
-            />
-        </>
-        )}
       </div>
     </section>
   );
