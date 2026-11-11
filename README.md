@@ -15,8 +15,7 @@ DataLens is an AI-powered data quality and analytics application that helps user
 - **Cleaning Preview:** Preview cleaning operations and compare dataset statistics before and after cleaning.
 - **Apply Cleaning:** Apply selected cleaning operations and save a separate cleaned version without modifying the original dataset.
 - **Cleaned CSV Download:** Download the processed dataset.
-- **AI-Powered Q&A:** Ask natural language questions about the uploaded dataset.
-- **Original & Cleaned Dataset Analysis:** Ask questions about both original and cleaned versions of the dataset.
+- **AI-Powered Q&A:** Ask natural language questions about both original(uploaded) and cleaned versions of the dataset.
 - **Context-Based AI Answers:** Generate answers using actual dataset statistics with the Groq API.
 
 ## 🛠️ Tech Stack
