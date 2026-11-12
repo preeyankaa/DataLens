@@ -1,18 +1,20 @@
 import json
 from io import BytesIO
 from uuid import uuid4
-
 import pandas as pd
+
+
+from pydantic import BaseModel
 from fastapi import FastAPI, File, HTTPException, UploadFile, Body
 from fastapi.responses import StreamingResponse
 
 from app.profiling import profile_dataframe
 from app.quality import check_data_quality
 from app.cleaning import clean_dataframe
-
-from pydantic import BaseModel
 from app.ai_service import ask_groq
 from app.data_analysis import build_dataset_context
+from app.visualization import build_visualization_data
+from app.ai_service import generate_dashboard_insights
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -36,16 +38,20 @@ app = FastAPI(
     version="0.3.0",
 )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://127.0.0.1:5174",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 # --------------------------------------------------
@@ -469,3 +475,100 @@ def ask_dataset_question(dataset_id: str, request: QuestionRequest):
             status_code=500,
             detail=f"Unable to answer question: {str(e)}"
         )
+
+    
+# --------------------------------------------------
+# 10. Dataset visualization endpoint
+# --------------------------------------------------
+
+@app.get("/api/v1/datasets/{dataset_id}/charts")
+def get_dataset_charts(dataset_id: str, version: str = "original"):
+
+    # Check whether dataset exists
+    if dataset_id not in datasets:
+
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again."
+        )
+
+    # Select requested dataset version
+    if version == "original":
+
+        df = datasets[dataset_id]
+
+    elif version == "cleaned":
+
+        if dataset_id not in cleaned_datasets:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Cleaned dataset not available. Apply cleaning first."
+            )
+
+        df = cleaned_datasets[dataset_id]
+
+    else:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Version must be 'original' or 'cleaned'."
+        )
+
+    # Generate visualization data
+    try:
+
+        result = build_visualization_data(df)
+
+        return {
+            "dataset_id": dataset_id,
+            "version": version,
+            **result
+        }
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to generate charts: {str(error)}"
+        )
+
+
+
+@app.get("/api/v1/datasets/{dataset_id}/dashboard")
+async def get_ai_dashboard(
+    dataset_id: str,
+    version: str = "original"
+):
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+
+    if version == "original":
+        df = datasets[dataset_id]
+    elif version == "cleaned":
+        if dataset_id not in cleaned_datasets:
+            raise HTTPException(
+                status_code=404,
+                detail="Cleaned dataset not available. Apply cleaning first."
+            )
+        df = cleaned_datasets[dataset_id]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Version must be original or cleaned."
+        )
+
+    visualization = build_visualization_data(df)
+
+    dashboard_ai = generate_dashboard_insights(
+        charts=visualization["charts"],
+        summary=visualization["summary"],
+        version=version
+    )
+
+    return {
+        "dataset_id": dataset_id,
+        "version": version,
+        **visualization,
+        "dashboard_ai": dashboard_ai
+    }
