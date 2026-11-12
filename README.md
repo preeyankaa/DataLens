@@ -2,49 +2,31 @@
 
 **AI-Powered Data Quality & Analytics Copilot**
 
-DataLens is an AI-powered data quality and analytics application that helps users upload, analyze, and clean CSV datasets. It automatically profiles datasets, identifies common data quality issues, and provides cleaning options. It also allows users to ask questions about their datasets using natural language.
+DataLens is a web-based application that helps users upload, analyze, and clean CSV datasets. It provides automated dataset profiling, data quality checks, customizable cleaning operations, visual analytics, and AI-powered question answering.
 
 ## 🚀 Features
 
-- **CSV Upload:** Upload CSV datasets for analysis.
-- **Dataset Profiling:** Get an overview of rows, columns, missing values, duplicates, and memory usage.
-- **Data Quality Analysis:** Identify missing values, duplicate records, potential outliers, negative values, and invalid dates.
-- **Column Statistics:** Explore data types, unique values, and numerical statistics.
-- **Data Preview:** View sample records from the uploaded dataset.
-- **Data Cleaning:** Handle missing values, remove duplicate rows, standardize dates, convert data types, and apply IQR-based outlier clipping.
-- **Cleaning Preview:** Preview cleaning operations and compare dataset statistics before and after cleaning.
-- **Apply Cleaning:** Apply selected cleaning operations and save a separate cleaned version without modifying the original dataset.
-- **Cleaned CSV Download:** Download the processed dataset.
-- **AI-Powered Q&A:** Ask natural language questions about both original(uploaded) and cleaned versions of the dataset.
-- **Context-Based AI Answers:** Generate answers using actual dataset statistics with the Groq API.
+- **CSV Upload & Profiling:** Analyze dataset dimensions, missing values, duplicates, data types, and column statistics.
+- **Data Quality Analysis:** Detect missing values, duplicates, outliers, and potential data inconsistencies.
+- **Data Cleaning:** Handle missing values, remove duplicates, standardize dates, convert data types, and apply outlier clipping.
+- **Cleaning Preview:** Review proposed changes before applying them.
+- **Original & Cleaned Versions:** Keep the uploaded dataset unchanged while maintaining a separate cleaned version.
+- **CSV Download:** Download the cleaned dataset.
+- **AI-Powered Q&A:** Ask natural language questions about original and cleaned datasets using the Groq API.
+- **Data Visualization:** Explore datasets through automatically generated charts, KPIs, and analytical insights.
 
 ## 🛠️ Tech Stack
 
-**Backend**
-- Python
-- FastAPI
-- Pandas
-- NumPy
-- Groq API
+**Backend:** Python, FastAPI, Pandas, NumPy, Groq API
 
-**Frontend**
-- React
-- JavaScript
-- Vite
-- CSS
-- Lucide React
-- React Markdown
+**Frontend:** React, JavaScript, Vite, CSS, Recharts, Lucide React, React Markdown
 
-**Tools**
-- Git & GitHub
-- VS Code
-- Swagger UI
+**Tools:** Git, GitHub, VS Code, Swagger UI
 
 ## 📁 Project Structure
 
 ```text
 DataLens/
-│
 ├── backend/
 │   ├── app/
 │   │   ├── main.py
@@ -52,22 +34,17 @@ DataLens/
 │   │   ├── quality.py
 │   │   ├── cleaning.py
 │   │   ├── data_analysis.py
+│   │   ├── visualization.py
 │   │   └── ai_service.py
-│   │
 │   ├── requirements.txt
-│   ├── .env
-│   └── ...
+│   └── .env
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
-│   │   ├── App.jsx
-│   │   ├── App.css
-│   │   └── main.jsx
-│   │
-│   ├── package.json
-│   └── ...
+│   │   └── ...
+│   └── package.json
 │
 └── README.md
 ```
@@ -75,8 +52,6 @@ DataLens/
 ## ⚙️ Getting Started
 
 ### Prerequisites
-
-Make sure you have the following installed:
 
 - Python 3.10+
 - Node.js and npm
@@ -89,24 +64,16 @@ git clone https://github.com/preeyankaa/DataLens.git
 cd DataLens
 ```
 
-### 2. Set Up the Backend
-
-Navigate to the backend directory:
+### 2. Backend Setup
 
 ```bash
 cd backend
-```
-
-Create a virtual environment:
-
-```bash
 python -m venv .venv
 ```
 
-Activate it:
+Activate the virtual environment:
 
 **Windows:**
-
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
@@ -117,105 +84,50 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Create a `.env` file inside the backend directory:
+Create a `.env` file inside `backend/`:
 
 ```env
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-20b
 ```
 
-Start the FastAPI server:
+Start the backend:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Backend API:
+API documentation: `http://127.0.0.1:8000/docs`
 
-```text
-http://127.0.0.1:8000
-```
+### 3. Frontend Setup
 
-API documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### 3. Set Up the Frontend
-
-Open another terminal and navigate to the frontend directory:
+Open another terminal:
 
 ```bash
 cd frontend
-```
-
-Install dependencies:
-
-```bash
 npm install
+npm run dev
 ```
 
-Start the development server:
-
-```bash
-npx vite --host=127.0.0.1 --port=5174 --strictPort
-```
-
-Open the application:
-
-```text
-http://127.0.0.1:5174
-```
+Open the local URL displayed in the terminal.
 
 ## 🔄 Application Workflow
 
 1. Upload a CSV dataset.
-2. Generate a dataset profile and view data quality metrics.
-3. Review detected issues such as missing values, duplicates, and outliers.
-4. Select the required cleaning operations.
-5. Preview the changes before applying them.
-6. Apply cleaning to generate a separate cleaned dataset.
-7. Download the cleaned CSV file.
-8. Ask questions about the original or cleaned dataset using the AI assistant.
-
-## 🧹 Supported Data Cleaning Operations
-
-| Operation | Description |
-|---|---|
-| Missing Value Handling | Fill missing values using Mean, Median, Mode, or a constant value |
-| Duplicate Removal | Remove duplicate records |
-| Date Standardization | Standardize selected date columns |
-| Data Type Conversion | Convert columns to integer, float, string, or datetime |
-| Outlier Handling | Apply IQR-based clipping to selected numerical columns |
-| Cleaning Preview | Compare dataset statistics before and after cleaning |
-| Apply Cleaning | Save the cleaned dataset separately from the original |
-| CSV Export | Download the cleaned dataset |
-
-## 🤖 AI-Powered Dataset Q&A
-
-DataLens integrates the Groq API to provide natural language question answering.
-
-Users can ask questions such as:
-
-- How many missing values are present in the dataset?
-- Which columns contain missing values?
-- What is the average value of a numerical column?
-- What are the key statistics of this dataset?
-
-The application uses Pandas to calculate dataset statistics and provides the relevant context to the AI assistant to generate natural language answers.
+2. Explore dataset profiles and quality reports.
+3. Review and select cleaning operations.
+4. Preview and apply cleaning.
+5. Download the cleaned dataset.
+6. Explore visual analytics and insights.
+7. Ask questions about the dataset using the AI assistant.
 
 ## 🗺️ Future Improvements
 
-- Interactive charts and visual analytics.
-- RAG-based data insights for more advanced dataset exploration.
+- Power BI-style interactive dashboard builder.
+- Advanced RAG-based dataset analysis.
 - User authentication and account management.
-- PostgreSQL integration for persistent dataset storage.
+- PostgreSQL integration for persistent storage.
 - AWS deployment.
-
-## 🎯 Project Goal
-
-The goal of DataLens is to simplify the data preparation and analysis process by bringing dataset profiling, data quality checks, cleaning, and AI-powered question answering into one application.
 
 ---
 
