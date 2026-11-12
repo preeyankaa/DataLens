@@ -8,25 +8,38 @@ import pandas as pd
 MAX_CATEGORIES = 12
 MAX_SCATTER_POINTS = 120
 MAX_AUTO_CHARTS = 12
+MIN_GROUP_RECORDS = 10
 
-ID_WORDS = {
-    "id", "ids", "uuid", "key", "code", "number", "no", "index"
+ID_WORDS = {"id", "ids", "uuid", "key", "code", "index"}
+DATE_WORDS = {"date", "time", "timestamp", "datetime"}
+
+REVENUE_ALIASES = {
+    "revenue", "sales", "total_sales", "net_sales",
+    "line_total", "order_total", "total_amount",
+    "amount", "turnover", "sales_amount",
 }
 
-REVENUE_WORDS = (
-    "revenue", "sales", "line_total", "order_total",
-    "total_amount", "amount", "turnover"
-)
+QUANTITY_ALIASES = {
+    "quantity", "qty", "units", "volume",
+    "units_sold", "quantity_sold",
+}
 
-QUANTITY_WORDS = ("quantity", "qty", "units", "volume")
-DATE_WORDS = ("date", "time", "timestamp", "month", "year")
-RETURN_WORDS = ("return", "returned", "refund", "refunded")
-DISCOUNT_WORDS = ("discount", "discount_pct", "discount_percent")
-PROFIT_WORDS = ("profit", "margin", "earnings")
+RETURN_ALIASES = {
+    "return", "returned", "return_status",
+    "is_returned", "refund", "refunded", "is_refunded",
+}
+
+DISCOUNT_ALIASES = {
+    "discount", "discount_pct", "discount_percent",
+}
+
+PROFIT_ALIASES = {"profit", "margin", "earnings"}
 
 
 def _name(column):
-    return re.sub(r"[^a-z0-9]+", "_", str(column).lower()).strip("_")
+    return re.sub(
+        r"[^a-z0-9]+", "_", str(column).lower()
+    ).strip("_")
 
 
 def _safe_number(value, digits=2):
@@ -39,19 +52,18 @@ def _safe_number(value, digits=2):
 
 
 def _clean_numeric(series):
-    return pd.to_numeric(series, errors="coerce").replace(
-        [np.inf, -np.inf], np.nan
-    )
+    return pd.to_numeric(
+        series, errors="coerce"
+    ).replace([np.inf, -np.inf], np.nan)
 
 
-def _contains_role(column, words):
+def _matches_alias(column, aliases):
     name = _name(column)
-    return any(
-        name == word
-        or name.startswith(word + "_")
-        or name.endswith("_" + word)
-        or word in name
-        for word in words
+
+    return (
+        name in aliases
+        or any(name.startswith(alias + "_") for alias in aliases)
+        or any(name.endswith("_" + alias) for alias in aliases)
     )
 
 
@@ -62,61 +74,146 @@ def _is_identifier(column, series):
     if tokens & ID_WORDS:
         return True
 
-    # Catch names such as customer_number or order_reference.
-    if any(word in name for word in ("identifier", "reference", "uuid")):
+    if any(
+        word in name
+        for word in ("identifier", "reference", "uuid")
+    ):
         return True
 
-    # High-cardinality integer-like columns are often record identifiers.
-    values = _clean_numeric(series).dropna()
-    if len(values) >= 20 and values.nunique() / len(values) > 0.85:
-        if pd.api.types.is_integer_dtype(series):
+    values = series.dropna()
+
+    if len(values) >= 20:
+        if values.nunique() / len(values) >= 0.95:
             return True
 
     return False
 
 
+def _infer_dayfirst(series):
+    day_votes = 0
+    month_votes = 0
+
+    for value in series.dropna().astype(str).head(500):
+        match = re.match(
+            r"^\s*(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})",
+            value,
+        )
+
+        if not match:
+            continue
+
+        first = int(match.group(1))
+        second = int(match.group(2))
+
+        if first > 12 and second <= 12:
+            day_votes += 1
+        elif second > 12 and first <= 12:
+            month_votes += 1
+
+    return day_votes > month_votes
+
+
 def _parse_dates(series):
-    """Parse common date formats, including mixed US and day-first values."""
     if pd.api.types.is_datetime64_any_dtype(series):
         return pd.to_datetime(series, errors="coerce")
 
     text = series.astype("string").str.strip()
-    parsed = pd.to_datetime(text, format="mixed", errors="coerce")
+    dayfirst = _infer_dayfirst(text)
 
-    # Retry values that failed, allowing day-first formats such as 17/11/2025.
+    parsed = pd.to_datetime(
+        text,
+        format="mixed",
+        dayfirst=dayfirst,
+        errors="coerce",
+    )
+
     failed = text.notna() & parsed.isna()
+
     if failed.any():
         retry = pd.to_datetime(
-            text[failed], format="mixed", dayfirst=True, errors="coerce"
+            text[failed],
+            format="mixed",
+            dayfirst=not dayfirst,
+            errors="coerce",
         )
         parsed.loc[failed] = retry
 
     return parsed
 
 
+def _normalize_category(series):
+    return (
+        series.astype("string")
+        .str.strip()
+        .str.replace(r"\s+", " ", regex=True)
+        .fillna("(Missing)")
+        .replace("", "(Missing)")
+    )
+
+
+def _to_binary_flag(series):
+    numeric = _clean_numeric(series)
+
+    if numeric.notna().sum() == series.notna().sum():
+        return numeric.where(numeric.isin([0, 1]))
+
+    text = series.astype("string").str.strip().str.lower()
+
+    positive = {
+        "yes", "y", "true", "1", "returned",
+        "refunded", "return", "refund",
+    }
+
+    negative = {
+        "no", "n", "false", "0", "not returned",
+        "not_refunded", "not returned/refunded",
+    }
+
+    result = pd.Series(np.nan, index=series.index, dtype=float)
+
+    result.loc[text.isin(positive)] = 1
+    result.loc[text.isin(negative)] = 0
+
+    return result
+
+
 def _detect_types(df):
-    numeric, categorical, dates = [], [], {}
+    numeric = []
+    categorical = []
+    dates = {}
     identifiers = []
 
     for column in df.columns:
         series = df[column]
         name = _name(column)
 
-        if _contains_role(column, DATE_WORDS) and not pd.api.types.is_numeric_dtype(series):
+        if (
+            any(word in name for word in DATE_WORDS)
+            or name in {"month", "year", "yr"}
+        ) and not pd.api.types.is_numeric_dtype(series):
+
             parsed = _parse_dates(series)
-            if parsed.notna().sum() >= max(3, int(series.notna().sum() * 0.5)):
+
+            if parsed.notna().sum() >= max(
+                3, int(series.notna().sum() * 0.5)
+            ):
                 dates[column] = parsed
                 continue
 
         if pd.api.types.is_datetime64_any_dtype(series):
-            dates[column] = pd.to_datetime(series, errors="coerce")
+            dates[column] = pd.to_datetime(
+                series, errors="coerce"
+            )
+
         elif pd.api.types.is_bool_dtype(series):
             categorical.append(column)
+
         elif pd.api.types.is_numeric_dtype(series):
             if _is_identifier(column, series):
                 identifiers.append(column)
             else:
                 numeric.append(column)
+
         else:
             parsed = _parse_dates(series)
             valid = parsed.notna().sum()
@@ -127,13 +224,17 @@ def _detect_types(df):
             else:
                 categorical.append(column)
 
+                if _is_identifier(column, series):
+                    identifiers.append(column)
+
     year_columns = []
+
     for column in numeric:
-        values = _clean_numeric(df[column]).dropna()
-        if (
-            _name(column) in {"year", "yr", "fiscal_year"}
-            or _name(column).endswith("_year")
-        ) and not values.empty:
+        name = _name(column)
+
+        if name in {
+            "year", "yr", "fiscal_year"
+        } or name.endswith("_year"):
             year_columns.append(column)
 
     return {
@@ -146,9 +247,16 @@ def _detect_types(df):
 
 
 def _make_chart(
-    chart_id, chart_type, title, subtitle,
-    x_label, y_label, data, insight_hint, size="medium",
-    aggregation=None
+    chart_id,
+    chart_type,
+    title,
+    subtitle,
+    x_label,
+    y_label,
+    data,
+    insight_hint,
+    size="medium",
+    aggregation=None,
 ):
     return {
         "id": chart_id,
@@ -167,44 +275,89 @@ def _make_chart(
 def _role_columns(df):
     columns = list(df.columns)
 
-    def first_match(words):
+    def first_alias(aliases):
         return next(
-            (col for col in columns if _contains_role(col, words)),
-            None
+            (
+                col for col in columns
+                if _matches_alias(col, aliases)
+            ),
+            None,
         )
 
+    product_name = next(
+        (
+            col for col in columns
+            if _name(col) in {
+                "product", "product_name",
+                "item", "item_name", "sku_name",
+            }
+        ),
+        None,
+    )
+
+    product_id = first_alias({
+        "product_id", "item_id", "sku_id",
+    })
+
+    product = product_name or product_id
+
     return {
-        "revenue": first_match(REVENUE_WORDS),
-        "quantity": first_match(QUANTITY_WORDS),
-        "order_id": first_match(("order_id", "order_number", "order_no")),
-        "customer_id": first_match(("customer_id", "client_id", "user_id")),
-        "product": first_match(("product", "item", "sku", "product_name")),
-        "category": first_match(("category", "department", "product_type")),
-        "channel": first_match(("channel", "sales_channel", "platform")),
-        "segment": first_match(("segment", "customer_segment")),
-        "returned": first_match(RETURN_WORDS),
-        "discount": first_match(DISCOUNT_WORDS),
-        "profit": first_match(PROFIT_WORDS),
+        "revenue": first_alias(REVENUE_ALIASES),
+        "quantity": first_alias(QUANTITY_ALIASES),
+        "order_id": first_alias({
+            "order_id", "order_number", "order_no",
+        }),
+        "customer_id": first_alias({
+            "customer_id", "client_id", "user_id",
+        }),
+        "product": product,
+        "product_id": product_id,
+        "category": first_alias({
+            "category", "department", "product_type",
+        }),
+        "channel": first_alias({
+            "channel", "sales_channel", "platform",
+        }),
+        "segment": first_alias({
+            "segment", "customer_segment",
+        }),
+        "returned": first_alias(RETURN_ALIASES),
+        "discount": first_alias(DISCOUNT_ALIASES),
+        "profit": first_alias(PROFIT_ALIASES),
     }
 
 
 def _group_chart(
-    df, category, metric, aggregation="sum",
-    title=None, label=None, chart_id=None, top_n=MAX_CATEGORIES
+    df,
+    category,
+    metric,
+    aggregation="sum",
+    title=None,
+    label=None,
+    chart_id=None,
+    top_n=MAX_CATEGORIES,
 ):
     values = df[[category, metric]].copy()
+
     values[metric] = _clean_numeric(values[metric])
-    values[category] = values[category].astype("string").fillna("(Missing)")
+    values[category] = _normalize_category(values[category])
     values = values.dropna(subset=[metric])
 
     if values.empty:
         return None
 
-    grouped = values.groupby(category)[metric].agg(aggregation)
-    grouped = grouped.sort_values(ascending=False).head(top_n)
+    grouped = (
+        values.groupby(category)[metric]
+        .agg(aggregation)
+        .sort_values(ascending=False)
+        .head(top_n)
+    )
 
     data = [
-        {"category": str(key), "value": _safe_number(value)}
+        {
+            "category": str(key),
+            "value": _safe_number(value),
+        }
         for key, value in grouped.items()
     ]
 
@@ -212,11 +365,14 @@ def _group_chart(
         return None
 
     aggregation_label = label or aggregation.capitalize()
+
     return _make_chart(
-        chart_id or f"{aggregation}_{_name(metric)}_by_{_name(category)}",
+        chart_id or (
+            f"{aggregation}_{_name(metric)}_by_{_name(category)}"
+        ),
         "bar",
         title or f"{aggregation_label} {metric} by {category}",
-        f"{aggregation_label} {metric} across the leading {category} groups.",
+        f"{aggregation_label} {metric} across leading {category} groups.",
         str(category),
         f"{aggregation_label} {metric}",
         data,
@@ -227,7 +383,7 @@ def _group_chart(
 
 
 def _distribution_chart(df, column):
-    values = df[column].astype("string").fillna("(Missing)")
+    values = _normalize_category(df[column])
     counts = values.value_counts().head(MAX_CATEGORIES)
 
     if counts.empty:
@@ -261,8 +417,15 @@ def _trend_chart(df, date_column, parsed_dates, metric, aggregation="sum"):
     if values.empty:
         return None
 
-    values["period"] = values["period"].dt.to_period("M").astype(str)
-    grouped = values.groupby("period")["metric"].agg(aggregation).sort_index()
+    values["period"] = (
+        values["period"].dt.to_period("M").astype(str)
+    )
+
+    grouped = (
+        values.groupby("period")["metric"]
+        .agg(aggregation)
+        .sort_index()
+    )
 
     if len(grouped) < 2:
         return None
@@ -272,16 +435,15 @@ def _trend_chart(df, date_column, parsed_dates, metric, aggregation="sum"):
         for period, value in grouped.items()
     ]
 
-    aggregation_label = aggregation.capitalize()
     return _make_chart(
         f"trend_{_name(metric)}_by_{_name(date_column)}",
         "line",
         f"Monthly {metric}",
-        f"{aggregation_label} {metric} by month.",
+        f"{aggregation.capitalize()} {metric} by month.",
         str(date_column),
-        f"{aggregation_label} {metric}",
+        f"{aggregation.capitalize()} {metric}",
         data,
-        f"Shows how {aggregation_label.lower()} {metric} changes over time.",
+        f"Shows how {aggregation} {metric} changes over time.",
         "large",
         aggregation=aggregation,
     )
@@ -289,15 +451,31 @@ def _trend_chart(df, date_column, parsed_dates, metric, aggregation="sum"):
 
 def _return_rate_chart(df, category, returned_column):
     values = df[[category, returned_column]].copy()
-    values[returned_column] = _clean_numeric(values[returned_column])
+
+    values[returned_column] = _to_binary_flag(
+        values[returned_column]
+    )
+    values[category] = _normalize_category(values[category])
     values = values.dropna(subset=[returned_column])
-    values[category] = values[category].astype("string").fillna("(Missing)")
 
     if values.empty:
         return None
 
-    grouped = values.groupby(category)[returned_column].agg(["mean", "count"])
-    grouped = grouped.sort_values("mean", ascending=False).head(MAX_CATEGORIES)
+    grouped = values.groupby(category)[returned_column].agg(
+        ["mean", "count"]
+    )
+
+    grouped = grouped[
+        grouped["count"] >= MIN_GROUP_RECORDS
+    ]
+
+    if grouped.empty:
+        return None
+
+    grouped = (
+        grouped.sort_values("mean", ascending=False)
+        .head(MAX_CATEGORIES)
+    )
 
     data = [
         {
@@ -312,7 +490,7 @@ def _return_rate_chart(df, category, returned_column):
         f"return_rate_by_{_name(category)}",
         "bar",
         f"Return rate by {category}",
-        "Percentage of returned records in each group.",
+        f"Return percentage for groups with at least {MIN_GROUP_RECORDS} records.",
         str(category),
         "Return rate (%)",
         data,
@@ -323,8 +501,6 @@ def _return_rate_chart(df, category, returned_column):
 
 
 def _customer_orders_chart(df, customer_id, order_id):
-    """Count distinct orders placed by each customer."""
-
     values = df[[customer_id, order_id]].dropna()
 
     if values.empty:
@@ -340,9 +516,9 @@ def _customer_orders_chart(df, customer_id, order_id):
     data = [
         {
             "category": str(customer),
-            "value": int(order_count),
+            "value": int(count),
         }
-        for customer, order_count in grouped.items()
+        for customer, count in grouped.items()
     ]
 
     return _make_chart(
@@ -353,27 +529,21 @@ def _customer_orders_chart(df, customer_id, order_id):
         str(customer_id),
         "Number of orders",
         data,
-        "Shows which customers have placed the most orders.",
+        "Each order is counted once per customer, even when an order has multiple product rows.",
         "large",
         aggregation="unique_orders_per_customer",
     )
 
 
 def _top_products_chart(df, product_column, quantity_column):
-    """Calculate total quantity sold per product."""
-
     values = df[[product_column, quantity_column]].copy()
 
     values[quantity_column] = _clean_numeric(
         values[quantity_column]
     )
-
-    values[product_column] = (
+    values[product_column] = _normalize_category(
         values[product_column]
-        .astype("string")
-        .fillna("(Unknown product)")
     )
-
     values = values.dropna(subset=[quantity_column])
 
     if values.empty:
@@ -408,6 +578,51 @@ def _top_products_chart(df, product_column, quantity_column):
     )
 
 
+def _top_products_by_orders_chart(
+    df,
+    product_column,
+    order_id,
+):
+    values = df[[product_column, order_id]].dropna().copy()
+
+    if values.empty:
+        return None
+
+    values[product_column] = _normalize_category(
+        values[product_column]
+    )
+
+    grouped = (
+        values.groupby(product_column)[order_id]
+        .nunique()
+        .sort_values(ascending=False)
+        .head(MAX_CATEGORIES)
+    )
+
+    if grouped.empty:
+        return None
+
+    data = [
+        {
+            "category": str(product),
+            "value": int(order_count),
+        }
+        for product, order_count in grouped.items()
+    ]
+
+    return _make_chart(
+        "top_products_by_orders",
+        "bar",
+        "Products by number of orders",
+        "Products ranked by the number of unique orders containing them.",
+        str(product_column),
+        "Number of orders",
+        data,
+        "This measures how frequently a product appears in orders, not the number of units sold.",
+        "large",
+        aggregation="unique_orders_per_product",
+    )
+
 
 def _scatter_chart(df, x_column, y_column):
     values = pd.DataFrame({
@@ -415,16 +630,25 @@ def _scatter_chart(df, x_column, y_column):
         "y": _clean_numeric(df[y_column]),
     }).dropna()
 
-    if len(values) < 5 or values["x"].nunique() < 2 or values["y"].nunique() < 2:
+    if (
+        len(values) < 5
+        or values["x"].nunique() < 2
+        or values["y"].nunique() < 2
+    ):
         return None
 
     correlation = values["x"].corr(values["y"])
+
     sample = values.sample(
-        min(len(values), MAX_SCATTER_POINTS), random_state=42
+        min(len(values), MAX_SCATTER_POINTS),
+        random_state=42,
     )
 
     data = [
-        {"x": _safe_number(row.x), "y": _safe_number(row.y)}
+        {
+            "x": _safe_number(row.x),
+            "y": _safe_number(row.y),
+        }
         for row in sample.itertuples(index=False)
     ]
 
@@ -444,10 +668,12 @@ def _scatter_chart(df, x_column, y_column):
 
 def _histogram_chart(df, column):
     values = _clean_numeric(df[column]).dropna()
+
     if len(values) < 2 or values.nunique() < 2:
         return None
 
     counts, edges = np.histogram(values, bins=10)
+
     data = [
         {
             "range": f"{edges[i]:.2f} – {edges[i + 1]:.2f}",
@@ -473,16 +699,23 @@ def _histogram_chart(df, column):
 def _correlation_chart(df, metrics):
     usable = [
         col for col in metrics
-        if _clean_numeric(df[col]).notna().sum() >= 5
-        and _clean_numeric(df[col]).nunique() > 1
+        if (
+            _clean_numeric(df[col]).notna().sum() >= 5
+            and _clean_numeric(df[col]).nunique() > 1
+        )
     ]
 
     if len(usable) < 2:
         return None
 
     correlation = df[usable].apply(_clean_numeric).corr()
+
     data = [
-        {"x": str(col), "y": str(row), "value": _safe_number(correlation.loc[row, col], 3)}
+        {
+            "x": str(col),
+            "y": str(row),
+            "value": _safe_number(correlation.loc[row, col], 3),
+        }
         for row in correlation.index
         for col in correlation.columns
         if pd.notna(correlation.loc[row, col])
@@ -504,22 +737,42 @@ def _correlation_chart(df, metrics):
 
 def _build_kpis(df, detected, roles):
     kpis = [
-        {"label": "Total records", "value": int(len(df)), "format": "number"},
-        {"label": "Columns", "value": int(len(df.columns)), "format": "number"},
-        {"label": "Missing values", "value": int(df.isna().sum().sum()), "format": "number"},
-        {"label": "Duplicate rows", "value": int(df.duplicated().sum()), "format": "number"},
+        {
+            "label": "Total records",
+            "value": int(len(df)),
+            "format": "number",
+        },
+        {
+            "label": "Columns",
+            "value": int(len(df.columns)),
+            "format": "number",
+        },
+        {
+            "label": "Missing values",
+            "value": int(df.isna().sum().sum()),
+            "format": "number",
+        },
+        {
+            "label": "Duplicate rows",
+            "value": int(df.duplicated().sum()),
+            "format": "number",
+        },
     ]
 
     revenue = roles["revenue"]
+
     if revenue:
-        total = _clean_numeric(df[revenue]).sum()
-        kpis.append({
-            "label": "Total revenue",
-            "value": _safe_number(total),
-            "format": "currency",
-        })
+        revenue_values = _clean_numeric(df[revenue]).dropna()
+
+        if not revenue_values.empty:
+            kpis.append({
+                "label": "Total revenue",
+                "value": _safe_number(revenue_values.sum()),
+                "format": "currency",
+            })
 
     order_id = roles["order_id"]
+
     if order_id:
         kpis.append({
             "label": "Unique orders",
@@ -528,6 +781,7 @@ def _build_kpis(df, detected, roles):
         })
 
     customer_id = roles["customer_id"]
+
     if customer_id:
         kpis.append({
             "label": "Unique customers",
@@ -538,6 +792,7 @@ def _build_kpis(df, detected, roles):
     if len(kpis) == 4 and detected["numeric"]:
         metric = detected["numeric"][0]
         values = _clean_numeric(df[metric]).dropna()
+
         if not values.empty:
             kpis.append({
                 "label": f"Average {metric}",
@@ -572,11 +827,12 @@ def build_visualization_data(df):
     categorical = detected["categorical"]
     dates = detected["dates"]
 
-    # Never treat identifiers or year fields as business measures.
     metrics = [
         col for col in numeric
-        if col not in detected["year_columns"]
-        and not _is_identifier(col, df[col])
+        if (
+            col not in detected["year_columns"]
+            and not _is_identifier(col, df[col])
+        )
     ]
 
     charts = []
@@ -590,70 +846,64 @@ def build_visualization_data(df):
     revenue = roles["revenue"]
     quantity = roles["quantity"]
     returned = roles["returned"]
+    order_id = roles["order_id"]
+    customer_id = roles["customer_id"]
+    product_column = roles["product"]
 
-    # 1. Business trends: revenue/sales/quantity by month.
+    # 1. Business trends.
     for date_column, parsed_dates in dates.items():
-        for metric in [revenue, quantity, roles["profit"]]:
+        for metric in [
+            revenue, quantity, roles["profit"]
+        ]:
             if metric and metric in df.columns:
                 add(_trend_chart(
                     df, date_column, parsed_dates, metric, "sum"
                 ))
 
-    # 2. Business comparisons: revenue by category/channel/segment/product.
+    # 2. Revenue comparisons.
     business_groups = [
         roles["category"],
         roles["channel"],
         roles["segment"],
-        roles["product"],
+        product_column,
     ]
 
     if revenue:
         for category in business_groups:
             if category and category in df.columns:
                 add(_group_chart(
-                    df, category, revenue,
+                    df,
+                    category,
+                    revenue,
                     aggregation="sum",
                     title=f"Revenue by {category}",
                     label="Total",
                     chart_id=f"revenue_by_{_name(category)}",
                 ))
 
-
-
-
-
-
-
-    # 2. Customer analytics: distinct orders per customer.
-    if roles["customer_id"] and roles["order_id"]:
+    # 3. Customer analytics.
+    if customer_id and order_id:
         add(_customer_orders_chart(
-            df,
-            roles["customer_id"],
-            roles["order_id"],
+            df, customer_id, order_id
         ))
 
-    # 3. Product analytics: quantity sold per product.
-    product_column = (
-        roles["product"]
-        or (
-            "product_id"
-            if "product_id" in df.columns
-            else None
-        )
-    )
-
+    # 4. Product analytics.
     if product_column and quantity:
         add(_top_products_chart(
-            df,
-            product_column,
-            quantity,
+            df, product_column, quantity
         ))
 
-    # 4. Customer revenue contribution.
-    if roles["customer_id"] and revenue:
+    # Number of unique orders containing each product.
+    if product_column and order_id:
+        add(_top_products_by_orders_chart(
+            df, product_column, order_id
+        ))
+
+    # 5. Customer revenue contribution.
+    if customer_id and revenue:
         add(_group_chart(
             df,
-            roles["customer_id"],
+            customer_id,
             revenue,
             aggregation="sum",
             title="Revenue by customer",
@@ -661,27 +911,47 @@ def build_visualization_data(df):
             chart_id="revenue_by_customer",
         ))
 
-
-
-
-
-
-
-    # 3. Return rate by meaningful business groups.
+    # 6. Return-rate comparisons.
     if returned:
-        for category in [roles["category"], roles["product"], roles["channel"]]:
+        for category in [
+            roles["category"],
+            product_column,
+            roles["channel"],
+        ]:
             if category and category in df.columns:
-                add(_return_rate_chart(df, category, returned))
+                add(_return_rate_chart(
+                    df, category, returned
+                ))
 
-    # 4. Average order value, calculated at order level (not line level).
-    order_id = roles["order_id"]
+    # 7. Order value distribution.
     if order_id and revenue:
         order_totals = df[[order_id, revenue]].copy()
-        order_totals[revenue] = _clean_numeric(order_totals[revenue])
-        order_totals = order_totals.dropna(subset=[order_id, revenue])
-        order_totals = order_totals.groupby(order_id)[revenue].sum()
 
-        if not order_totals.empty:
+        order_totals[revenue] = _clean_numeric(
+            order_totals[revenue]
+        )
+
+        order_totals = order_totals.dropna(
+            subset=[order_id, revenue]
+        )
+
+        order_totals = (
+            order_totals.groupby(order_id)[revenue].sum()
+        )
+
+        if len(order_totals) >= 2 and order_totals.nunique() > 1:
+            counts, edges = np.histogram(
+                order_totals, bins=10
+            )
+
+            data = [
+                {
+                    "range": f"{edges[i]:.2f} – {edges[i + 1]:.2f}",
+                    "value": int(counts[i]),
+                }
+                for i in range(len(counts))
+            ]
+
             add(_make_chart(
                 "order_value_distribution",
                 "histogram",
@@ -689,17 +959,13 @@ def build_visualization_data(df):
                 "Distribution of total value after combining line items per order.",
                 "Order value",
                 "Number of orders",
-                [
-                    {"range": f"{edges[i]:.2f} – {edges[i + 1]:.2f}", "value": int(counts[i])}
-                    for counts, edges in [np.histogram(order_totals, bins=10)]
-                    for i in range(len(counts))
-                ],
+                data,
                 f"Average order value: {_safe_number(order_totals.mean())}.",
                 "medium",
                 aggregation="sum_by_order_then_distribution",
             ))
 
-    # 5. Generic fallback: category vs sensible numeric measure.
+    # 8. Generic fallback.
     useful_categories = [
         col for col in categorical
         if 1 < df[col].nunique(dropna=True) <= 30
@@ -707,7 +973,13 @@ def build_visualization_data(df):
 
     generic_metrics = [
         col for col in metrics
-        if col not in {revenue, quantity, returned, roles["discount"], roles["profit"]}
+        if col not in {
+            revenue,
+            quantity,
+            returned,
+            roles["discount"],
+            roles["profit"],
+        }
     ]
 
     if not charts:
@@ -717,30 +989,33 @@ def build_visualization_data(df):
                     df, category, metric, aggregation="mean"
                 ))
 
-    # 6. Generic trends only when a real measure is available.
     if not charts:
         for date_column, parsed_dates in dates.items():
             for metric in generic_metrics[:3]:
-                add(_trend_chart(df, date_column, parsed_dates, metric, "mean"))
+                add(_trend_chart(
+                    df, date_column, parsed_dates, metric, "mean"
+                ))
 
-    # 7. Useful numeric relationships, excluding IDs and binary flags.
+    # 9. Numeric relationships.
     relationship_metrics = [
         col for col in metrics
-        if col != returned
-        and df[col].nunique(dropna=True) > 5
+        if df[col].nunique(dropna=True) > 5
     ]
 
     relationship_count = 0
+
     for i, first in enumerate(relationship_metrics):
         for second in relationship_metrics[i + 1:]:
             add(_scatter_chart(df, first, second))
             relationship_count += 1
+
             if relationship_count >= 3:
                 break
+
         if relationship_count >= 3:
             break
 
-    # 8. Supporting distribution and correlation charts.
+    # 10. Supporting charts.
     add(_correlation_chart(df, relationship_metrics))
 
     for column in useful_categories[:3]:
@@ -752,22 +1027,40 @@ def build_visualization_data(df):
     charts = charts[:MAX_AUTO_CHARTS]
 
     columns = []
+
     for column in df.columns:
         if column in dates:
             column_type = "date"
             chart_types = ["line", "bar"]
+
         elif column in numeric:
-            column_type = "identifier" if column in detected["identifiers"] else "numeric"
-            chart_types = ["bar", "line", "scatter", "histogram"]
+            column_type = (
+                "identifier"
+                if column in detected["identifiers"]
+                else "numeric"
+            )
+
+            chart_types = (
+                ["bar", "donut"]
+                if column_type == "identifier"
+                else ["bar", "line", "scatter", "histogram"]
+            )
+
         else:
-            column_type = "categorical"
+            column_type = (
+                "identifier"
+                if column in detected["identifiers"]
+                else "categorical"
+            )
             chart_types = ["bar", "donut"]
 
         columns.append({
             "name": str(column),
             "type": column_type,
             "chart_types": chart_types,
-            "unique_values": int(df[column].nunique(dropna=True)),
+            "unique_values": int(
+                df[column].nunique(dropna=True)
+            ),
             "missing_values": int(df[column].isna().sum()),
         })
 

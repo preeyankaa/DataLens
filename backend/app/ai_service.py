@@ -115,12 +115,11 @@ def _dashboard_fallback(charts, summary, version):
     }
 
 
+
 def generate_dashboard_insights(charts, summary, version="original"):
     """
-    Select and explain meaningful dashboard charts.
-
-    Python calculates all chart values. Groq only selects and explains
-    the supplied chart candidates; it must not create new statistics.
+    Select and explain useful dashboard charts.
+    Python calculates values; AI selects and interprets them.
     """
 
     valid_charts = [
@@ -135,71 +134,73 @@ def generate_dashboard_insights(charts, summary, version="original"):
     if client is None or not valid_charts:
         return fallback
 
+    # Send compact chart information instead of large datasets.
     chart_candidates = []
 
-    for chart in valid_charts:
+    for chart in valid_charts[:10]:
         chart_candidates.append({
             "id": chart.get("id"),
             "title": chart.get("title"),
-            "chart_type": chart.get("chart_type"),
-            "subtitle": chart.get("subtitle"),
+            "type": chart.get("chart_type"),
+            "subtitle": str(chart.get("subtitle", ""))[:150],
             "aggregation": chart.get("aggregation"),
-            "insight_hint": chart.get("insight_hint"),
-            "data_preview": chart.get("data", [])[:10],
+            "finding_hint": str(
+                chart.get("insight_hint", "")
+            )[:250],
+            "data": chart.get("data", [])[:6],
         })
 
+    compact_summary = {
+        key: value
+        for key, value in summary.items()
+        if isinstance(value, (str, int, float, bool))
+        or value is None
+    }
+
     prompt = f"""
-You are creating the AI-generated dashboard for DataLens,
-an analytics tool used by non-technical business users.
+Create a useful business analytics dashboard for DataLens.
 
 Dataset version: {version}
 
 Dataset summary:
-{json.dumps(summary, default=str)}
+{json.dumps(compact_summary, default=str)}
 
-Available calculated chart candidates:
+Available calculated charts:
 {json.dumps(chart_candidates, default=str)}
 
-Your tasks:
-1. Select the 4 to 6 most useful charts for understanding this dataset.
-2. Prioritize business-relevant trends, comparisons, contributions,
-   return rates and relationships when available.
-3. Avoid charts based on identifiers such as order IDs, customer IDs
-   or product IDs as if they were numerical business measures.
-4. Avoid selecting multiple charts that communicate the same finding.
-5. Write a concise dashboard headline and a short summary.
-6. For each selected chart, explain:
-   - What the data actually shows.
-   - Why the finding may matter.
-   - What a business user could investigate next.
+TASK:
+1. Select 4 to 6 different, useful charts.
+2. Prioritize business trends, comparisons, contributions,
+   relationships and performance.
+3. Avoid duplicate findings.
+4. Write a clear headline and a concise two-sentence summary.
+5. Explain each selected chart using:
+   - observation
+   - business impact
+   - practical suggestion
 
-Strict rules:
-- Select chart IDs ONLY from the supplied candidates.
-- Do not create charts or chart IDs.
-- Do not invent, estimate or calculate numerical values.
-- Use only the supplied chart data and insight hints.
+RULES:
+- Use only supplied chart IDs and data.
+- Never invent numerical values.
+- Do not treat IDs as business metrics.
 - Do not claim causation from correlation.
-- Do not call a result an increase or decrease unless the data supports it.
-- If a chart does not support a clear conclusion, describe what it displays
-  instead of making up a finding.
-- Keep the language simple and concise.
-- Return valid JSON only. No Markdown or code fences.
+- Do not invent trends or comparisons.
+- Use simple language for non-technical users.
+- Keep each explanation concise.
+- Return valid JSON only.
 
-Return exactly this structure:
+OUTPUT:
 {{
-  "headline": "Short dashboard headline",
-  "summary": "Two short sentences about the dataset.",
-  "selected_chart_ids": [
-    "valid_chart_id_1",
-    "valid_chart_id_2"
-  ],
+  "headline": "Dashboard headline",
+  "summary": "Two sentence summary",
+  "selected_chart_ids": ["chart_id"],
   "insights": [
     {{
-      "chart_id": "valid_chart_id_1",
-      "title": "Short finding",
-      "observation": "What the supplied data shows.",
-      "business_impact": "Why this could matter.",
-      "suggestion": "One practical next step."
+      "chart_id": "chart_id",
+      "title": "Finding title",
+      "observation": "What the data shows",
+      "business_impact": "Why it matters",
+      "suggestion": "What to investigate next"
     }}
   ]
 }}
@@ -213,8 +214,7 @@ Return exactly this structure:
                     "role": "system",
                     "content": (
                         "You are a careful business data analyst. "
-                        "Use only supplied information. Never invent "
-                        "statistics or conclusions. Return valid JSON only."
+                        "Use only supplied facts. Return valid JSON."
                     ),
                 },
                 {
@@ -223,45 +223,55 @@ Return exactly this structure:
                 },
             ],
             temperature=0.2,
-            max_completion_tokens=1400,
+            max_completion_tokens=900,
         )
 
-        content = response.choices[0].message.content or ""
-        content = content.strip()
+        content = (
+            response.choices[0].message.content or ""
+        ).strip()
 
-        # Remove optional Markdown JSON fences.
-        content = re.sub(r"^```(?:json)?\s*", "", content)
+        content = re.sub(
+            r"^```(?:json)?\s*", "", content
+        )
         content = re.sub(r"\s*```$", "", content)
 
         result = json.loads(content)
 
         valid_ids = {
-            chart.get("id") for chart in valid_charts
+            chart["id"] for chart in valid_charts
         }
 
         selected_ids = [
             chart_id
             for chart_id in result.get("selected_chart_ids", [])
             if chart_id in valid_ids
-        ]
+        ][:6]
 
         if not selected_ids:
             selected_ids = fallback["selected_chart_ids"]
 
-        # Only keep insights connected to actual chart candidates.
         insights = []
+
         for insight in result.get("insights", [])[:5]:
             chart_id = insight.get("chart_id")
 
-            if chart_id and chart_id not in valid_ids:
+            if chart_id not in selected_ids:
                 continue
 
             insights.append({
                 "chart_id": chart_id,
-                "title": str(insight.get("title", "Dataset finding"))[:150],
-                "observation": str(insight.get("observation", ""))[:500],
-                "business_impact": str(insight.get("business_impact", ""))[:400],
-                "suggestion": str(insight.get("suggestion", ""))[:400],
+                "title": str(
+                    insight.get("title", "Dataset finding")
+                )[:150],
+                "observation": str(
+                    insight.get("observation", "")
+                )[:500],
+                "business_impact": str(
+                    insight.get("business_impact", "")
+                )[:400],
+                "suggestion": str(
+                    insight.get("suggestion", "")
+                )[:400],
             })
 
         return {

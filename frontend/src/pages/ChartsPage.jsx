@@ -16,9 +16,12 @@ import {
   Legend,
   LineChart,
   Line,
+  AreaChart,
+  Area,
   ScatterChart,
   Scatter,
   ZAxis,
+  Treemap,
 } from "recharts";
 
 import {
@@ -32,8 +35,8 @@ import {
   Sparkles,
   SlidersHorizontal,
   Lightbulb,
-  ArrowUpRight,
   Info,
+  Activity,
 } from "lucide-react";
 
 import "./ChartsPage.css";
@@ -53,6 +56,20 @@ const CHART_COLORS = [
   "#D28B70",
 ];
 
+const GRID_STYLE = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
+  gap: "18px",
+  alignItems: "stretch",
+};
+
+const CARD_STYLE = {
+  minWidth: 0,
+  height: "100%",
+};
+
+const CHART_HEIGHT = 235;
+
 const formatNumber = (value) => {
   if (value === null || value === undefined) return "—";
 
@@ -64,6 +81,12 @@ const formatNumber = (value) => {
 
   return value;
 };
+
+const compactNumber = (value) =>
+  Number(value).toLocaleString("en-IN", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  });
 
 function HeatmapChart({ data }) {
   const xLabels = [...new Set(data.map((item) => item.x))];
@@ -88,7 +111,7 @@ function HeatmapChart({ data }) {
       <div
         className="heatmap-grid"
         style={{
-          gridTemplateColumns: `100px repeat(${xLabels.length}, minmax(55px, 1fr))`,
+          gridTemplateColumns: `90px repeat(${xLabels.length}, minmax(45px, 1fr))`,
         }}
       >
         <div className="heatmap-corner" />
@@ -124,15 +147,32 @@ function HeatmapChart({ data }) {
       </div>
 
       <div className="heatmap-legend">
-        <span>Negative correlation</span>
+        <span>Negative</span>
         <span className="heatmap-legend-gradient" />
-        <span>Positive correlation</span>
+        <span>Positive</span>
       </div>
     </div>
   );
 }
 
-function RenderChart({ chart, height = 300 }) {
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+
+  return (
+    <div className="chart-custom-tooltip">
+      {label && <strong>{label}</strong>}
+
+      {payload.map((item, index) => (
+        <div key={index}>
+          <span>{item.name || item.dataKey}: </span>
+          <strong>{formatNumber(item.value)}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RenderChart({ chart, height = CHART_HEIGHT }) {
   if (!chart || !chart.data?.length) {
     return (
       <div className="chart-no-data">
@@ -142,70 +182,140 @@ function RenderChart({ chart, height = 300 }) {
     );
   }
 
+  const data = chart.data;
+
+  const axisProps = {
+    tick: { fontSize: 10, fill: "#8b90a0" },
+    axisLine: false,
+    tickLine: false,
+  };
+
+  const commonMargin = {
+    top: 8,
+    right: 12,
+    left: -12,
+    bottom: 8,
+  };
+
   if (chart.chart_type === "heatmap") {
-    return <HeatmapChart data={chart.data} />;
+    return <HeatmapChart data={data} />;
   }
 
-  if (chart.chart_type === "bar") {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart
-          data={chart.data}
-          margin={{ top: 12, right: 12, left: 0, bottom: 55 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-          <XAxis
-            dataKey="category"
-            angle={-30}
-            textAnchor="end"
-            interval={0}
-            tick={{ fontSize: 10 }}
-            height={75}
-          />
-          <YAxis
-            tick={{ fontSize: 10 }}
-            tickFormatter={(value) =>
-              Number(value).toLocaleString("en-IN", {
-                notation: "compact",
-              })
-            }
-          />
-          <Tooltip formatter={(value) => formatNumber(value)} />
-          <Bar
-            dataKey="value"
-            name={chart.y_label || "Value"}
-            fill="#7166E8"
-            radius={[5, 5, 0, 0]}
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.chart_type === "donut") {
+  if (
+    chart.chart_type === "donut" ||
+    chart.chart_type === "pie"
+  ) {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Pie
-            data={chart.data}
+            data={data}
             dataKey="value"
             nameKey="category"
             cx="50%"
-            cy="46%"
-            innerRadius={62}
-            outerRadius={100}
-            paddingAngle={3}
+            cy="45%"
+            innerRadius={chart.chart_type === "donut" ? 52 : 0}
+            outerRadius={85}
+            paddingAngle={chart.chart_type === "donut" ? 3 : 1}
+            stroke="none"
           >
-            {chart.data.map((entry, index) => (
+            {data.map((entry, index) => (
               <Cell
                 key={`${entry.category}-${index}`}
                 fill={CHART_COLORS[index % CHART_COLORS.length]}
               />
             ))}
           </Pie>
-          <Tooltip formatter={(value) => formatNumber(value)} />
-          <Legend />
+
+          <Tooltip content={<ChartTooltip />} />
+
+          <Legend
+            verticalAlign="bottom"
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 10 }}
+          />
         </PieChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (
+    chart.chart_type === "bar" ||
+    chart.chart_type === "horizontal_bar"
+  ) {
+    const horizontal = chart.chart_type === "horizontal_bar";
+
+    if (horizontal) {
+      return (
+        <ResponsiveContainer width="100%" height={height}>
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 5, right: 18, left: 10, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+
+            <XAxis
+              type="number"
+              {...axisProps}
+              tickFormatter={compactNumber}
+            />
+
+            <YAxis
+              type="category"
+              dataKey="category"
+              width={100}
+              {...axisProps}
+              tick={{ ...axisProps.tick, fontSize: 10 }}
+            />
+
+            <Tooltip content={<ChartTooltip />} />
+
+            <Bar
+              dataKey="value"
+              name={chart.y_label || "Value"}
+              fill="#7166E8"
+              radius={[0, 5, 5, 0]}
+              barSize={17}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      );
+    }
+
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart
+          data={data}
+          margin={{ top: 8, right: 8, left: -15, bottom: 42 }}
+        >
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+
+          <XAxis
+            dataKey="category"
+            angle={-25}
+            textAnchor="end"
+            interval={0}
+            height={55}
+            {...axisProps}
+          />
+
+          <YAxis
+            {...axisProps}
+            tickFormatter={compactNumber}
+          />
+
+          <Tooltip content={<ChartTooltip />} />
+
+          <Bar
+            dataKey="value"
+            name={chart.y_label || "Value"}
+            fill="#7166E8"
+            radius={[5, 5, 0, 0]}
+            barSize={35}
+          />
+        </BarChart>
       </ResponsiveContainer>
     );
   }
@@ -213,35 +323,67 @@ function RenderChart({ chart, height = 300 }) {
   if (chart.chart_type === "line") {
     return (
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart
-          data={chart.data}
-          margin={{ top: 12, right: 15, left: 0, bottom: 10 }}
-        >
+        <LineChart data={data} margin={commonMargin}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
+
           <XAxis
             dataKey="period"
-            tick={{ fontSize: 10 }}
+            {...axisProps}
             minTickGap={20}
           />
+
           <YAxis
-            tick={{ fontSize: 10 }}
-            tickFormatter={(value) =>
-              Number(value).toLocaleString("en-IN", {
-                notation: "compact",
-              })
-            }
+            {...axisProps}
+            tickFormatter={compactNumber}
           />
-          <Tooltip formatter={(value) => formatNumber(value)} />
+
+          <Tooltip content={<ChartTooltip />} />
+
           <Line
             type="monotone"
             dataKey="value"
             name={chart.y_label || "Value"}
             stroke="#7166E8"
             strokeWidth={2.5}
-            dot={{ r: 3 }}
-            activeDot={{ r: 6 }}
+            dot={false}
+            activeDot={{ r: 5 }}
           />
         </LineChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (chart.chart_type === "area") {
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={data} margin={commonMargin}>
+          <defs>
+            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#7166E8" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#7166E8" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+
+          <XAxis dataKey="period" {...axisProps} />
+
+          <YAxis
+            {...axisProps}
+            tickFormatter={compactNumber}
+          />
+
+          <Tooltip content={<ChartTooltip />} />
+
+          <Area
+            type="monotone"
+            dataKey="value"
+            name={chart.y_label || "Value"}
+            stroke="#7166E8"
+            strokeWidth={2}
+            fill="url(#areaGradient)"
+          />
+        </AreaChart>
       </ResponsiveContainer>
     );
   }
@@ -249,34 +391,31 @@ function RenderChart({ chart, height = 300 }) {
   if (chart.chart_type === "scatter") {
     return (
       <ResponsiveContainer width="100%" height={height}>
-        <ScatterChart margin={{ top: 15, right: 15, bottom: 15, left: 5 }}>
+        <ScatterChart margin={commonMargin}>
           <CartesianGrid strokeDasharray="3 3" />
+
           <XAxis
             type="number"
             dataKey="x"
             name={chart.x_label || "X"}
-            tick={{ fontSize: 10 }}
-            tickFormatter={(value) =>
-              Number(value).toLocaleString("en-IN", {
-                notation: "compact",
-              })
-            }
+            {...axisProps}
+            tickFormatter={compactNumber}
           />
+
           <YAxis
             type="number"
             dataKey="y"
             name={chart.y_label || "Y"}
-            tick={{ fontSize: 10 }}
-            tickFormatter={(value) =>
-              Number(value).toLocaleString("en-IN", {
-                notation: "compact",
-              })
-            }
+            {...axisProps}
+            tickFormatter={compactNumber}
           />
+
           <ZAxis range={[35, 35]} />
+
           <Tooltip cursor={{ strokeDasharray: "3 3" }} />
+
           <Scatter
-            data={chart.data}
+            data={data}
             fill="#32A6A0"
             fillOpacity={0.65}
           />
@@ -289,20 +428,24 @@ function RenderChart({ chart, height = 300 }) {
     return (
       <ResponsiveContainer width="100%" height={height}>
         <BarChart
-          data={chart.data}
-          margin={{ top: 12, right: 12, left: 0, bottom: 55 }}
+          data={data}
+          margin={{ top: 8, right: 8, left: -15, bottom: 42 }}
         >
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
+
           <XAxis
             dataKey="range"
-            angle={-30}
+            angle={-25}
             textAnchor="end"
-            interval={0}
-            tick={{ fontSize: 9 }}
-            height={75}
+            interval="preserveStartEnd"
+            height={55}
+            {...axisProps}
           />
-          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-          <Tooltip />
+
+          <YAxis allowDecimals={false} {...axisProps} />
+
+          <Tooltip content={<ChartTooltip />} />
+
           <Bar
             dataKey="value"
             name="Records"
@@ -314,11 +457,63 @@ function RenderChart({ chart, height = 300 }) {
     );
   }
 
+  if (chart.chart_type === "treemap") {
+    return (
+      <ResponsiveContainer width="100%" height={height}>
+        <Treemap
+          data={data.map((item, index) => ({
+            ...item,
+            name: item.category,
+            size: item.value,
+            fill: CHART_COLORS[index % CHART_COLORS.length],
+          }))}
+          dataKey="size"
+          nameKey="name"
+          stroke="#fff"
+          content={<TreemapContent />}
+        >
+          <Tooltip content={<ChartTooltip />} />
+        </Treemap>
+      </ResponsiveContainer>
+    );
+  }
+
   return (
     <div className="chart-no-data">
       <Info size={20} />
       <span>Unsupported chart type: {chart.chart_type}</span>
     </div>
+  );
+}
+
+function TreemapContent({ x, y, width, height, name, fill }) {
+  if (width < 35 || height < 25) return null;
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        style={{
+          fill,
+          stroke: "#fff",
+          strokeWidth: 2,
+        }}
+      />
+
+      {width > 65 && height > 35 && (
+        <text
+          x={x + 7}
+          y={y + 18}
+          fill="#fff"
+          fontSize={11}
+        >
+          {String(name).slice(0, 15)}
+        </text>
+      )}
+    </g>
   );
 }
 
@@ -366,6 +561,7 @@ function ChartsPage() {
       setSelectedChartId(firstSelectedId);
     } catch (err) {
       setDashboard(null);
+
       setError(
         err.message === "Failed to fetch"
           ? "Unable to connect to the backend. Check whether FastAPI is running."
@@ -418,6 +614,7 @@ function ChartsPage() {
         <AlertCircle size={30} />
         <h3>Unable to load dashboard</h3>
         <p>{error}</p>
+
         <button onClick={fetchDashboard}>
           <RefreshCw size={16} />
           Try again
@@ -428,14 +625,41 @@ function ChartsPage() {
 
   if (!dashboard) return null;
 
+  const summaryCards = [
+    {
+      label: "Total Records",
+      value: summary.total_rows,
+      icon: Database,
+      color: "purple",
+    },
+    {
+      label: "Total Columns",
+      value: summary.total_columns,
+      icon: Layers,
+      color: "blue",
+    },
+    {
+      label: "Numeric Columns",
+      value: summary.numeric_columns,
+      icon: Hash,
+      color: "green",
+    },
+    {
+      label: "Missing Values",
+      value: summary.missing_values,
+      icon: BarChart3,
+      color: "orange",
+    },
+  ];
+
   return (
     <div className="charts-page">
       <div className="charts-page-heading">
         <div>
           <span className="page-eyebrow">DATA VISUALIZATION</span>
-          <h1>Charts & Analytics</h1>
+          <h1>Analytics Dashboard</h1>
           <p>
-            Understand your data with AI-powered insights and interactive charts.
+            Explore your data, discover patterns and understand business performance.
           </p>
         </div>
 
@@ -461,6 +685,7 @@ function ChartsPage() {
           >
             Original
           </button>
+
           <button
             className={version === "cleaned" ? "active" : ""}
             onClick={() => setVersion("cleaned")}
@@ -470,47 +695,50 @@ function ChartsPage() {
         </div>
       </div>
 
-      <div className="charts-summary-grid">
-        <div className="charts-summary-card">
-          <div className="summary-icon purple">
-            <Database size={20} />
-          </div>
-          <div>
-            <span>Total Records</span>
-            <h2>{formatNumber(summary.total_rows)}</h2>
-          </div>
-        </div>
+      <div
+        className="charts-summary-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
+          gap: "12px",
+        }}
+      >
+        {summaryCards.map((item) => {
+          const Icon = item.icon;
 
-        <div className="charts-summary-card">
-          <div className="summary-icon blue">
-            <Layers size={20} />
-          </div>
-          <div>
-            <span>Total Columns</span>
-            <h2>{formatNumber(summary.total_columns)}</h2>
-          </div>
-        </div>
+          return (
+            <div className="charts-summary-card" key={item.label}>
+              <div className={`summary-icon ${item.color}`}>
+                <Icon size={19} />
+              </div>
 
-        <div className="charts-summary-card">
-          <div className="summary-icon green">
-            <Hash size={20} />
-          </div>
-          <div>
-            <span>Numeric Columns</span>
-            <h2>{formatNumber(summary.numeric_columns)}</h2>
-          </div>
-        </div>
-
-        <div className="charts-summary-card">
-          <div className="summary-icon orange">
-            <BarChart3 size={20} />
-          </div>
-          <div>
-            <span>Missing Values</span>
-            <h2>{formatNumber(summary.missing_values)}</h2>
-          </div>
-        </div>
+              <div>
+                <span>{item.label}</span>
+                <h2>{formatNumber(item.value)}</h2>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {kpis.length > 0 && (
+        <div
+          className="business-kpi-grid"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: "12px",
+            marginTop: "12px",
+          }}
+        >
+          {kpis.map((kpi, index) => (
+            <div className="business-kpi-card" key={index}>
+              <span>{kpi.label}</span>
+              <h3>{formatNumber(kpi.value)}</h3>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="dashboard-mode-switch">
         <button
@@ -540,6 +768,7 @@ function ChartsPage() {
             <div className="ai-intro-content">
               <span className="ai-label">AI DATA ANALYSIS</span>
               <h2>{ai.headline || "Your dataset at a glance"}</h2>
+
               <p>
                 {ai.summary ||
                   "Explore the charts below to understand patterns, comparisons and relationships in your dataset."}
@@ -556,32 +785,44 @@ function ChartsPage() {
               <div>
                 <h2>Key Visualizations</h2>
                 <p>
-                  Charts selected to highlight useful patterns in your dataset.
+                  Your most useful charts, automatically selected from the dataset.
                 </p>
               </div>
+
               <span className="chart-count">
                 {aiCharts.length} Charts
               </span>
             </div>
 
-            <div className="automatic-charts-grid">
+            <div
+              className="automatic-charts-grid"
+              style={GRID_STYLE}
+            >
               {aiCharts.map((chart, index) => (
                 <article
                   className={`visualization-card chart-size-${chart.size || "medium"}`}
                   key={chart.id || index}
+                  style={CARD_STYLE}
                 >
                   <div className="visualization-card-heading">
                     <div>
                       <span className="chart-type-label">
-                        {chart.chart_type}
+                        {chart.chart_type?.replace("_", " ")}
                       </span>
+
                       <h3>{chart.title}</h3>
-                      <p className="chart-subtitle">{chart.subtitle}</p>
+
+                      <p className="chart-subtitle">
+                        {chart.subtitle}
+                      </p>
                     </div>
-                    <TrendingUp size={19} />
+
+                    <Activity size={18} />
                   </div>
 
-                  <RenderChart chart={chart} />
+                  <div className="visualization-chart-area">
+                    <RenderChart chart={chart} />
+                  </div>
 
                   <div className="chart-card-footer">
                     <span>{chart.x_label || "Dataset"}</span>
@@ -602,7 +843,9 @@ function ChartsPage() {
               <div className="empty-charts">
                 <BarChart3 size={30} />
                 <h3>No visualizations available</h3>
-                <p>This dataset does not have enough suitable data for charts.</p>
+                <p>
+                  This dataset does not have enough suitable data for charts.
+                </p>
               </div>
             )}
           </section>
@@ -611,20 +854,27 @@ function ChartsPage() {
             <div className="charts-section-heading">
               <div>
                 <h2>Business Insights</h2>
-                <p>What these patterns could mean for your analysis.</p>
+                <p>
+                  Understand what the patterns could mean for your analysis.
+                </p>
               </div>
+
               <span className="insight-count">
                 {(ai.insights || []).length} Insights
               </span>
             </div>
 
             {(ai.insights || []).length > 0 ? (
-              <div className="business-insights-grid">
+              <div
+                className="business-insights-grid"
+                style={GRID_STYLE}
+              >
                 {ai.insights.map((insight, index) => (
                   <article className="business-insight-card" key={index}>
                     <div className="insight-number">
                       {String(index + 1).padStart(2, "0")}
                     </div>
+
                     <div>
                       <h3>{insight.title}</h3>
                       <p>{insight.observation}</p>
@@ -669,13 +919,19 @@ function ChartsPage() {
           <div className="chart-builder-card">
             <div className="chart-builder-controls">
               <div className="chart-control">
-                <label htmlFor="custom-chart-select">Select visualization</label>
+                <label htmlFor="custom-chart-select">
+                  Select visualization
+                </label>
+
                 <select
                   id="custom-chart-select"
                   value={selectedChartId}
-                  onChange={(event) => setSelectedChartId(event.target.value)}
+                  onChange={(event) =>
+                    setSelectedChartId(event.target.value)
+                  }
                 >
                   <option value="">Choose a chart</option>
+
                   {charts.map((chart) => (
                     <option key={chart.id} value={chart.id}>
                       {chart.title}
@@ -686,6 +942,7 @@ function ChartsPage() {
 
               <div className="chart-control">
                 <label>Dataset version</label>
+
                 <select
                   value={version}
                   onChange={(event) => setVersion(event.target.value)}
@@ -703,10 +960,14 @@ function ChartsPage() {
                     <h3>{selectedChart.title}</h3>
                     <p>{selectedChart.subtitle}</p>
                   </div>
+
                   <span>{selectedChart.chart_type}</span>
                 </div>
 
-                <RenderChart chart={selectedChart} height={360} />
+                <RenderChart
+                  chart={selectedChart}
+                  height={360}
+                />
 
                 {selectedChart.insight_hint && (
                   <div className="chart-insight-hint custom-chart-hint">
@@ -719,7 +980,9 @@ function ChartsPage() {
               <div className="chart-builder-empty">
                 <SlidersHorizontal size={35} />
                 <h3>Choose a visualization</h3>
-                <p>Select one of the generated charts to preview it here.</p>
+                <p>
+                  Select one of the generated charts to preview it here.
+                </p>
               </div>
             )}
           </div>
@@ -727,8 +990,8 @@ function ChartsPage() {
           <div className="customize-note">
             <Info size={17} />
             <p>
-              Column selection, aggregation, chart type changes and filters
-              will be enabled after the custom chart calculation API is added.
+              Custom column selection, aggregation, chart type changes and
+              filters will be enabled after the custom chart calculation API is added.
             </p>
           </div>
         </section>

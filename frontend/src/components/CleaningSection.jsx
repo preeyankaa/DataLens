@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   WandSparkles,
   Download,
@@ -7,6 +7,86 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
+
+const API_URL = "http://127.0.0.1:8000";
+
+const isNumericColumn = (dataType) =>
+  ["int64", "float64", "int", "float", "number"].includes(
+    String(dataType).toLowerCase()
+  );
+
+const normalizeName = (name) =>
+  String(name).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+const isIdentifierColumn = (name) => {
+  const normalized = normalizeName(name);
+  const tokens = normalized.split("_");
+
+  return (
+    tokens.includes("id") ||
+    tokens.includes("uuid") ||
+    tokens.includes("identifier") ||
+    tokens.includes("reference") ||
+    normalized.endsWith("_key")
+  );
+};
+
+const isDateColumn = (name, details = {}) => {
+  const normalized = normalizeName(name);
+  const dataType = String(details.data_type || "").toLowerCase();
+
+  return (
+    normalized.includes("date") ||
+    normalized.includes("timestamp") ||
+    normalized.includes("time") ||
+    dataType.includes("datetime")
+  );
+};
+
+const getDefaultStrategy = (name, details) => {
+  const normalized = normalizeName(name);
+
+  if (
+    ["returned", "is_returned", "return_status"].includes(normalized)
+  ) {
+    return "skip";
+  }
+
+  if (isIdentifierColumn(name)) {
+    return "skip";
+  }
+
+  if (isDateColumn(name, details)) {
+    return "drop_rows";
+  }
+
+  if (
+    ["line_total", "total", "revenue", "sales_amount"].includes(normalized)
+  ) {
+    return "skip";
+  }
+
+  if (isNumericColumn(details.data_type)) {
+    return "median";
+  }
+
+  return "unknown";
+};
+
+const createInitialMissingSelection = (columns) => {
+  const initial = {};
+
+  Object.entries(columns).forEach(([name, details]) => {
+    if (details.missing_count > 0) {
+      initial[name] = {
+        enabled: true,
+        strategy: getDefaultStrategy(name, details),
+      };
+    }
+  });
+
+  return initial;
+};
 
 function CleaningSection({ datasetId, profile }) {
   const columns = profile?.columns || {};
@@ -17,32 +97,30 @@ function CleaningSection({ datasetId, profile }) {
   );
 
   const numericalColumns = Object.keys(statistics).filter(
-    (name) => !name.toLowerCase().endsWith("_id")
+    (name) => !isIdentifierColumn(name)
   );
+
+  const dateColumns = Object.entries(columns)
+    .filter(([name, details]) => isDateColumn(name, details))
+    .map(([name]) => name);
+
+  const profileSignature = Object.entries(columns)
+    .map(([name, details]) =>
+      `${name}:${details.missing_count}:${details.data_type}`
+    )
+    .join("|");
 
   const [removeDuplicates, setRemoveDuplicates] = useState(true);
 
-  const [selectedMissing, setSelectedMissing] = useState(() => {
-    const initial = {};
-
-    Object.entries(columns).forEach(([name, details]) => {
-      if (details.missing_count > 0) {
-        initial[name] = {
-          enabled: true,
-          strategy:
-            details.data_type === "object" || details.data_type === "str"
-              ? "mode"
-              : "median",
-        };
-      }
-    });
-
-    return initial;
-  });
+  const [selectedMissing, setSelectedMissing] = useState(() =>
+    createInitialMissingSelection(columns)
+  );
 
   const [selectedOutliers, setSelectedOutliers] = useState([]);
 
   const [preview, setPreview] = useState(null);
+  const [previewPayload, setPreviewPayload] = useState(null);
+
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -51,6 +129,18 @@ function CleaningSection({ datasetId, profile }) {
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    setSelectedMissing(createInitialMissingSelection(columns));
+    setSelectedOutliers([]);
+    setRemoveDuplicates(true);
+
+    setPreview(null);
+    setPreviewPayload(null);
+    setCleanedReady(false);
+    setSuccess("");
+    setError("");
+  }, [datasetId, profileSignature]);
 
   const buildPayload = () => {
     const missingValues = {};
@@ -66,12 +156,14 @@ function CleaningSection({ datasetId, profile }) {
     return {
       remove_duplicates: removeDuplicates,
       missing_values: missingValues,
+      date_columns: dateColumns,
       outlier_columns: selectedOutliers,
     };
   };
 
   const resetCleaningStatus = () => {
     setPreview(null);
+    setPreviewPayload(null);
     setCleanedReady(false);
     setSuccess("");
     setError("");
@@ -116,17 +208,21 @@ function CleaningSection({ datasetId, profile }) {
     setError("");
     setSuccess("");
     setPreview(null);
+    setPreviewPayload(null);
     setCleanedReady(false);
 
     try {
+      // Save the exact settings used for this preview.
+      const payload = buildPayload();
+
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/datasets/${datasetId}/clean/preview`,
+        `${API_URL}/api/v1/datasets/${datasetId}/clean/preview`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(buildPayload()),
+          body: JSON.stringify(payload),
         }
       );
 
@@ -141,6 +237,7 @@ function CleaningSection({ datasetId, profile }) {
       }
 
       setPreview(data);
+      setPreviewPayload(payload);
     } catch (err) {
       setError(err.message || "Something went wrong.");
     } finally {
@@ -148,21 +245,25 @@ function CleaningSection({ datasetId, profile }) {
     }
   };
 
-  // Save the cleaned dataset in the backend
   const handleApplyCleaning = async () => {
+    if (!preview || !previewPayload) {
+      setError("Please generate a preview before applying cleaning.");
+      return;
+    }
+
     setApplying(true);
     setError("");
     setSuccess("");
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/datasets/${datasetId}/clean/apply`,
+        `${API_URL}/api/v1/datasets/${datasetId}/clean/apply`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(buildPayload()),
+          body: JSON.stringify(previewPayload),
         }
       );
 
@@ -177,6 +278,7 @@ function CleaningSection({ datasetId, profile }) {
       }
 
       setCleanedReady(true);
+
       setSuccess(
         "Cleaning applied successfully. Your cleaned dataset is ready for AI questions."
       );
@@ -188,19 +290,24 @@ function CleaningSection({ datasetId, profile }) {
   };
 
   const handleDownload = async () => {
+    if (!cleanedReady || !previewPayload) {
+      setError("Please apply cleaning before downloading the cleaned CSV.");
+      return;
+    }
+
     setDownloading(true);
     setError("");
     setSuccess("");
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/datasets/${datasetId}/clean/download`,
+        `${API_URL}/api/v1/datasets/${datasetId}/clean/download`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(buildPayload()),
+          body: JSON.stringify(previewPayload),
         }
       );
 
@@ -209,6 +316,7 @@ function CleaningSection({ datasetId, profile }) {
 
         try {
           const data = await response.json();
+
           if (typeof data.detail === "string") {
             message = data.detail;
           }
@@ -225,17 +333,70 @@ function CleaningSection({ datasetId, profile }) {
 
       link.href = url;
       link.download = "datalens-cleaned.csv";
+
       document.body.appendChild(link);
       link.click();
       link.remove();
 
       window.URL.revokeObjectURL(url);
+
       setSuccess("Your cleaned CSV has been downloaded.");
     } catch (err) {
       setError(err.message || "Download failed.");
     } finally {
       setDownloading(false);
     }
+  };
+
+  const renderStrategyOptions = (name, details) => {
+    const normalized = normalizeName(name);
+
+    if (
+      ["returned", "is_returned", "return_status"].includes(normalized) ||
+      isIdentifierColumn(name)
+    ) {
+      return <option value="skip">Keep missing values</option>;
+    }
+
+    if (
+      ["line_total", "total", "revenue", "sales_amount"].includes(normalized)
+    ) {
+      return (
+        <>
+          <option value="skip">Keep missing values (recommended)</option>
+          <option value="median">Median</option>
+          <option value="mean">Mean</option>
+        </>
+      );
+    }
+
+    if (isDateColumn(name, details)) {
+      return (
+        <>
+          <option value="drop_rows">Remove rows with missing dates</option>
+          <option value="skip">Keep missing values</option>
+        </>
+      );
+    }
+
+    if (isNumericColumn(details.data_type)) {
+      return (
+        <>
+          <option value="median">Median</option>
+          <option value="mean">Mean</option>
+          <option value="mode">Mode</option>
+          <option value="skip">Keep missing values</option>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <option value="unknown">Fill as (Unknown)</option>
+        <option value="skip">Keep missing values</option>
+        <option value="mode">Mode</option>
+      </>
+    );
   };
 
   return (
@@ -284,6 +445,7 @@ function CleaningSection({ datasetId, profile }) {
                     checked={selectedMissing[name]?.enabled ?? false}
                     onChange={() => handleMissingToggle(name)}
                   />
+
                   <span>
                     <strong>{name}</strong>
                     <small>{details.missing_count} missing values</small>
@@ -291,23 +453,13 @@ function CleaningSection({ datasetId, profile }) {
                 </label>
 
                 <select
-                  value={selectedMissing[name]?.strategy || "median"}
+                  value={selectedMissing[name]?.strategy || "skip"}
                   disabled={!selectedMissing[name]?.enabled}
                   onChange={(e) =>
                     handleStrategyChange(name, e.target.value)
                   }
                 >
-                  {["int64", "float64", "int", "float"].includes(
-                    details.data_type
-                  ) ? (
-                    <>
-                      <option value="median">Median</option>
-                      <option value="mean">Mean</option>
-                      <option value="mode">Mode</option>
-                    </>
-                  ) : (
-                    <option value="mode">Mode</option>
-                  )}
+                  {renderStrategyOptions(name, details)}
                 </select>
               </div>
             ))
@@ -351,7 +503,7 @@ function CleaningSection({ datasetId, profile }) {
             className="primary-button"
             type="button"
             onClick={handlePreview}
-            disabled={loading || applying}
+            disabled={loading || applying || downloading || !datasetId}
           >
             {loading ? (
               <>
@@ -427,7 +579,7 @@ function CleaningSection({ datasetId, profile }) {
                   <div className="detail-row" key={name}>
                     <span>{name.replaceAll("_", " ")}</span>
                     <strong>
-                      {typeof value === "object"
+                      {typeof value === "object" && value !== null
                         ? Object.entries(value)
                             .map(([key, val]) => `${key}: ${val}`)
                             .join(" · ")
@@ -459,7 +611,11 @@ function CleaningSection({ datasetId, profile }) {
                     {preview.preview.map((row, index) => (
                       <tr key={index}>
                         {Object.keys(preview.preview[0]).map((key) => (
-                          <td key={key}>{row[key] ?? "—"}</td>
+                          <td key={key}>
+                            {row[key] === null || row[key] === undefined
+                              ? "—"
+                              : String(row[key])}
+                          </td>
                         ))}
                       </tr>
                     ))}
@@ -474,7 +630,7 @@ function CleaningSection({ datasetId, profile }) {
               className="primary-button"
               type="button"
               onClick={handleApplyCleaning}
-              disabled={applying || cleanedReady}
+              disabled={applying || cleanedReady || loading || downloading}
             >
               {applying ? (
                 <>
@@ -498,10 +654,12 @@ function CleaningSection({ datasetId, profile }) {
               className="primary-button download-cleaned-button"
               type="button"
               onClick={handleDownload}
-              disabled={downloading}
+              disabled={downloading || !cleanedReady || applying}
             >
               <Download size={18} />
-              {downloading ? "Preparing download..." : "Download cleaned CSV"}
+              {downloading
+                ? "Preparing download..."
+                : "Download cleaned CSV"}
             </button>
           </div>
 
