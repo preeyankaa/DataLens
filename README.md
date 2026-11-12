@@ -15,7 +15,7 @@ DataLens is a web-based application that helps users upload, analyze, and clean 
 - **AI-Powered Q&A:** Ask natural language questions about original and cleaned datasets using the Groq API.
 - **Data Visualization:** Explore datasets through automatically generated charts, KPIs, and analytical insights.
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack 
 
 **Backend:** Python, FastAPI, Pandas, NumPy, Groq API
 
