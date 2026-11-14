@@ -1078,3 +1078,224 @@ def build_visualization_data(df):
         "columns": columns,
         "charts": charts,
     }
+
+
+
+def build_custom_chart(
+    df,
+    chart_type,
+    x_column,
+    y_column=None,
+    aggregation="sum",
+    filters=None,
+    top_n=10,
+):
+    """Build chart data from user-selected dataset columns."""
+
+    import pandas as pd
+    import numpy as np
+
+    allowed_types = {
+        "bar", "horizontal_bar", "line", "area",
+        "pie", "donut", "scatter", "histogram",
+        "heatmap", "table",
+    }
+    allowed_aggregations = {"sum", "average", "count", "min", "max"}
+
+    if chart_type not in allowed_types:
+        raise ValueError("Unsupported chart type.")
+
+    if aggregation not in allowed_aggregations:
+        raise ValueError("Unsupported aggregation.")
+
+    if x_column not in df.columns:
+        raise ValueError(f"Column '{x_column}' does not exist.")
+
+    if y_column and y_column not in df.columns:
+        raise ValueError(f"Column '{y_column}' does not exist.")
+
+    if not 1 <= int(top_n) <= 50:
+        raise ValueError("Top N must be between 1 and 50.")
+
+    data = df.copy()
+
+    # Apply user-selected filters
+    for item in filters or []:
+        column = item.get("column")
+        operator = item.get("operator")
+        value = item.get("value")
+
+        if column not in data.columns:
+            raise ValueError(f"Filter column '{column}' does not exist.")
+
+        series = data[column]
+
+        if operator == "equals":
+            data = data[series.astype(str) == str(value)]
+        elif operator == "not_equals":
+            data = data[series.astype(str) != str(value)]
+        elif operator == "contains":
+            data = data[
+                series.astype(str).str.contains(
+                    str(value), case=False, na=False
+                )
+            ]
+        elif operator == "greater_than":
+            data = data[pd.to_numeric(series, errors="coerce") > float(value)]
+        elif operator == "less_than":
+            data = data[pd.to_numeric(series, errors="coerce") < float(value)]
+        elif operator == "is_missing":
+            data = data[series.isna()]
+        elif operator == "is_not_missing":
+            data = data[series.notna()]
+        else:
+            raise ValueError(f"Unsupported filter operator: {operator}")
+
+    if data.empty:
+        raise ValueError("No records match the selected filters.")
+
+    # Table chart
+    if chart_type == "table":
+        result = data.head(200).replace({np.nan: None})
+        return {
+            "chart_type": "table",
+            "title": "Dataset Records",
+            "data": result.to_dict(orient="records"),
+            "columns": list(data.columns),
+        }
+
+    # Histogram
+    if chart_type == "histogram":
+        if not y_column:
+            y_column = x_column
+
+        numeric = pd.to_numeric(data[y_column], errors="coerce").dropna()
+
+        if numeric.empty:
+            raise ValueError("Histogram requires a numeric column.")
+
+        counts, edges = np.histogram(numeric, bins="auto")
+        result = [
+            {
+                "range": f"{edges[i]:.2f} - {edges[i + 1]:.2f}",
+                "value": int(counts[i]),
+            }
+            for i in range(len(counts))
+        ]
+
+        return {
+            "chart_type": "histogram",
+            "title": f"Distribution of {y_column}",
+            "x_label": y_column,
+            "y_label": "Frequency",
+            "data": result,
+        }
+
+    # Scatter chart
+    if chart_type == "scatter":
+        if not y_column:
+            raise ValueError("Scatter chart requires both X and Y columns.")
+
+        x_values = pd.to_numeric(data[x_column], errors="coerce")
+        y_values = pd.to_numeric(data[y_column], errors="coerce")
+
+        points = pd.DataFrame({"x": x_values, "y": y_values}).dropna()
+        points = points.head(500)
+
+        if points.empty:
+            raise ValueError("Scatter chart requires numeric X and Y columns.")
+
+        return {
+            "chart_type": "scatter",
+            "title": f"{y_column} vs {x_column}",
+            "x_label": x_column,
+            "y_label": y_column,
+            "data": points.to_dict(orient="records"),
+        }
+
+    # Heatmap: categorical X against categorical Y, or numeric aggregation
+    if chart_type == "heatmap":
+        if not y_column:
+            raise ValueError("Heatmap requires a Y column.")
+
+        grouped = (
+            data.groupby([x_column, y_column], dropna=False)
+            .size()
+            .reset_index(name="value")
+            .head(200)
+        )
+
+        grouped = grouped.rename(
+            columns={x_column: "x", y_column: "y"}
+        )
+
+        return {
+            "chart_type": "heatmap",
+            "title": f"{x_column} vs {y_column}",
+            "x_label": x_column,
+            "y_label": y_column,
+            "data": grouped.to_dict(orient="records"),
+        }
+
+    if not y_column:
+        raise ValueError("Please select a Y-axis column.")
+
+    # Prevent summing or averaging identifier columns
+    id_tokens = ("id", "uuid", "identifier", "reference", "ref", "key")
+    y_name = str(y_column).lower().replace(" ", "_")
+
+    is_identifier = (
+        any(token in y_name.split("_") for token in id_tokens)
+        or data[y_column].nunique(dropna=True) >= max(50, int(len(data) * 0.95))
+    )
+
+    if aggregation in {"sum", "average", "min", "max"}:
+        if is_identifier:
+            raise ValueError(
+                "ID-like columns cannot be used for numeric aggregation. "
+                "Choose a numeric measure instead."
+            )
+
+        data[y_column] = pd.to_numeric(data[y_column], errors="coerce")
+        data = data.dropna(subset=[y_column])
+
+        if data.empty:
+            raise ValueError("Selected Y column has no valid numeric values.")
+
+    if aggregation == "sum":
+        grouped = data.groupby(x_column, dropna=False)[y_column].sum()
+    elif aggregation == "average":
+        grouped = data.groupby(x_column, dropna=False)[y_column].mean()
+    elif aggregation == "min":
+        grouped = data.groupby(x_column, dropna=False)[y_column].min()
+    elif aggregation == "max":
+        grouped = data.groupby(x_column, dropna=False)[y_column].max()
+    else:
+        grouped = data.groupby(x_column, dropna=False).size()
+
+    grouped = grouped.reset_index(name="value")
+
+    # Sort by metric and apply Top N
+    grouped = grouped.sort_values("value", ascending=False).head(int(top_n))
+
+    # Sort dates chronologically for line and area charts
+    if chart_type in {"line", "area"}:
+        parsed_dates = pd.to_datetime(grouped[x_column], errors="coerce")
+        if parsed_dates.notna().any():
+            grouped["_sort_date"] = parsed_dates
+            grouped = grouped.sort_values("_sort_date")
+            grouped = grouped.drop(columns="_sort_date")
+
+    grouped[x_column] = grouped[x_column].astype(str)
+    grouped["value"] = grouped["value"].replace(
+        [np.inf, -np.inf], np.nan
+    ).fillna(0)
+
+    return {
+        "chart_type": chart_type,
+        "title": f"{aggregation.title()} of {y_column} by {x_column}",
+        "x_label": x_column,
+        "y_label": aggregation.title(),
+        "aggregation": aggregation,
+        "data": grouped.to_dict(orient="records"),
+    }

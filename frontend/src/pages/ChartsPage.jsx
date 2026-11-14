@@ -1,7 +1,6 @@
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-
 import {
   ResponsiveContainer,
   BarChart,
@@ -23,7 +22,6 @@ import {
   ZAxis,
   Treemap,
 } from "recharts";
-
 import {
   BarChart3,
   Database,
@@ -37,134 +35,82 @@ import {
   Lightbulb,
   Info,
   Activity,
+  Plus,
+  Trash2,
 } from "lucide-react";
-
+import InteractiveChartBuilder from "../components/InteractiveChartBuilder";
 import "./ChartsPage.css";
 
 const API_URL = "http://127.0.0.1:8000";
 
-const CHART_COLORS = [
-  "#7166E8",
-  "#32A6A0",
-  "#F2A65A",
-  "#E8799B",
-  "#5B91D5",
-  "#9B83C7",
-  "#77B88A",
-  "#E5C45C",
-  "#8C9BAA",
-  "#D28B70",
+const COLORS = [
+  "#6366f1",
+  "#06b6d4",
+  "#10b981",
+  "#f59e0b",
+  "#ec4899",
+  "#8b5cf6",
+  "#f97316",
+  "#14b8a6",
+  "#3b82f6",
+  "#84cc16",
 ];
 
 const GRID_STYLE = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 390px), 1fr))",
-  gap: "18px",
-  alignItems: "stretch",
+  stroke: "#e5e7eb",
+  strokeDasharray: "3 3",
 };
 
-const CARD_STYLE = {
-  minWidth: 0,
-  height: "100%",
+const AXIS_STYLE = {
+  fontSize: 11,
+  fill: "#64748b",
 };
-
-const CHART_HEIGHT = 235;
 
 const formatNumber = (value) => {
-  if (value === null || value === undefined) return "—";
-
-  if (typeof value === "number") {
-    return value.toLocaleString("en-IN", {
-      maximumFractionDigits: 2,
-    });
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "-";
   }
 
-  return value;
+  return Number(value).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  });
 };
 
-const compactNumber = (value) =>
-  Number(value).toLocaleString("en-IN", {
+const formatCompact = (value) => {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) return value;
+
+  return new Intl.NumberFormat("en-IN", {
     notation: "compact",
     maximumFractionDigits: 1,
-  });
+  }).format(number);
+};
 
-function HeatmapChart({ data }) {
-  const xLabels = [...new Set(data.map((item) => item.x))];
-  const yLabels = [...new Set(data.map((item) => item.y))];
+const getChartData = (chart) => {
+  if (!chart) return [];
 
-  const getCell = (x, y) =>
-    data.find((item) => item.x === x && item.y === y);
+  if (Array.isArray(chart.data)) return chart.data;
 
-  const getColor = (value) => {
-    if (value === null || value === undefined) return "#f1f0f6";
-
-    const intensity = Math.min(Math.abs(value), 1);
-    const alpha = 0.12 + intensity * 0.75;
-
-    return value >= 0
-      ? `rgba(50, 166, 160, ${alpha})`
-      : `rgba(232, 121, 155, ${alpha})`;
-  };
-
-  return (
-    <div className="heatmap-wrapper">
-      <div
-        className="heatmap-grid"
-        style={{
-          gridTemplateColumns: `90px repeat(${xLabels.length}, minmax(45px, 1fr))`,
-        }}
-      >
-        <div className="heatmap-corner" />
-
-        {xLabels.map((label) => (
-          <div className="heatmap-axis-label" key={label}>
-            {label}
-          </div>
-        ))}
-
-        {yLabels.map((yLabel) => (
-          <div className="heatmap-row-fragment" key={yLabel}>
-            <div className="heatmap-y-label">{yLabel}</div>
-
-            {xLabels.map((xLabel) => {
-              const cell = getCell(xLabel, yLabel);
-
-              return (
-                <div
-                  className="heatmap-cell"
-                  key={`${xLabel}-${yLabel}`}
-                  style={{
-                    background: getColor(cell?.value),
-                  }}
-                  title={`${yLabel} / ${xLabel}: ${cell?.value ?? "N/A"}`}
-                >
-                  {cell?.value?.toFixed(2) ?? "—"}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-
-      <div className="heatmap-legend">
-        <span>Negative</span>
-        <span className="heatmap-legend-gradient" />
-        <span>Positive</span>
-      </div>
-    </div>
-  );
-}
+  return [];
+};
 
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
 
   return (
-    <div className="chart-custom-tooltip">
-      {label && <strong>{label}</strong>}
+    <div className="chart-tooltip">
+      {label !== undefined && (
+        <p className="chart-tooltip-label">{String(label)}</p>
+      )}
 
       {payload.map((item, index) => (
-        <div key={index}>
-          <span>{item.name || item.dataKey}: </span>
+        <div className="chart-tooltip-row" key={index}>
+          <span
+            className="chart-tooltip-dot"
+            style={{ background: item.color || item.fill || COLORS[index] }}
+          />
+          <span>{item.name || "Value"}:</span>
           <strong>{formatNumber(item.value)}</strong>
         </div>
       ))}
@@ -172,321 +118,7 @@ function ChartTooltip({ active, payload, label }) {
   );
 }
 
-function RenderChart({ chart, height = CHART_HEIGHT }) {
-  if (!chart || !chart.data?.length) {
-    return (
-      <div className="chart-no-data">
-        <Info size={20} />
-        <span>Not enough data to display this chart.</span>
-      </div>
-    );
-  }
-
-  const data = chart.data;
-
-  const axisProps = {
-    tick: { fontSize: 10, fill: "#8b90a0" },
-    axisLine: false,
-    tickLine: false,
-  };
-
-  const commonMargin = {
-    top: 8,
-    right: 12,
-    left: -12,
-    bottom: 8,
-  };
-
-  if (chart.chart_type === "heatmap") {
-    return <HeatmapChart data={data} />;
-  }
-
-  if (
-    chart.chart_type === "donut" ||
-    chart.chart_type === "pie"
-  ) {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="category"
-            cx="50%"
-            cy="45%"
-            innerRadius={chart.chart_type === "donut" ? 52 : 0}
-            outerRadius={85}
-            paddingAngle={chart.chart_type === "donut" ? 3 : 1}
-            stroke="none"
-          >
-            {data.map((entry, index) => (
-              <Cell
-                key={`${entry.category}-${index}`}
-                fill={CHART_COLORS[index % CHART_COLORS.length]}
-              />
-            ))}
-          </Pie>
-
-          <Tooltip content={<ChartTooltip />} />
-
-          <Legend
-            verticalAlign="bottom"
-            iconType="circle"
-            iconSize={8}
-            wrapperStyle={{ fontSize: 10 }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (
-    chart.chart_type === "bar" ||
-    chart.chart_type === "horizontal_bar"
-  ) {
-    const horizontal = chart.chart_type === "horizontal_bar";
-
-    if (horizontal) {
-      return (
-        <ResponsiveContainer width="100%" height={height}>
-          <BarChart
-            data={data}
-            layout="vertical"
-            margin={{ top: 5, right: 18, left: 10, bottom: 5 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-
-            <XAxis
-              type="number"
-              {...axisProps}
-              tickFormatter={compactNumber}
-            />
-
-            <YAxis
-              type="category"
-              dataKey="category"
-              width={100}
-              {...axisProps}
-              tick={{ ...axisProps.tick, fontSize: 10 }}
-            />
-
-            <Tooltip content={<ChartTooltip />} />
-
-            <Bar
-              dataKey="value"
-              name={chart.y_label || "Value"}
-              fill="#7166E8"
-              radius={[0, 5, 5, 0]}
-              barSize={17}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      );
-    }
-
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart
-          data={data}
-          margin={{ top: 8, right: 8, left: -15, bottom: 42 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-
-          <XAxis
-            dataKey="category"
-            angle={-25}
-            textAnchor="end"
-            interval={0}
-            height={55}
-            {...axisProps}
-          />
-
-          <YAxis
-            {...axisProps}
-            tickFormatter={compactNumber}
-          />
-
-          <Tooltip content={<ChartTooltip />} />
-
-          <Bar
-            dataKey="value"
-            name={chart.y_label || "Value"}
-            fill="#7166E8"
-            radius={[5, 5, 0, 0]}
-            barSize={35}
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.chart_type === "line") {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={data} margin={commonMargin}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-
-          <XAxis
-            dataKey="period"
-            {...axisProps}
-            minTickGap={20}
-          />
-
-          <YAxis
-            {...axisProps}
-            tickFormatter={compactNumber}
-          />
-
-          <Tooltip content={<ChartTooltip />} />
-
-          <Line
-            type="monotone"
-            dataKey="value"
-            name={chart.y_label || "Value"}
-            stroke="#7166E8"
-            strokeWidth={2.5}
-            dot={false}
-            activeDot={{ r: 5 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.chart_type === "area") {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={data} margin={commonMargin}>
-          <defs>
-            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#7166E8" stopOpacity={0.35} />
-              <stop offset="95%" stopColor="#7166E8" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-
-          <XAxis dataKey="period" {...axisProps} />
-
-          <YAxis
-            {...axisProps}
-            tickFormatter={compactNumber}
-          />
-
-          <Tooltip content={<ChartTooltip />} />
-
-          <Area
-            type="monotone"
-            dataKey="value"
-            name={chart.y_label || "Value"}
-            stroke="#7166E8"
-            strokeWidth={2}
-            fill="url(#areaGradient)"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.chart_type === "scatter") {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <ScatterChart margin={commonMargin}>
-          <CartesianGrid strokeDasharray="3 3" />
-
-          <XAxis
-            type="number"
-            dataKey="x"
-            name={chart.x_label || "X"}
-            {...axisProps}
-            tickFormatter={compactNumber}
-          />
-
-          <YAxis
-            type="number"
-            dataKey="y"
-            name={chart.y_label || "Y"}
-            {...axisProps}
-            tickFormatter={compactNumber}
-          />
-
-          <ZAxis range={[35, 35]} />
-
-          <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-
-          <Scatter
-            data={data}
-            fill="#32A6A0"
-            fillOpacity={0.65}
-          />
-        </ScatterChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.chart_type === "histogram") {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart
-          data={data}
-          margin={{ top: 8, right: 8, left: -15, bottom: 42 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" vertical={false} />
-
-          <XAxis
-            dataKey="range"
-            angle={-25}
-            textAnchor="end"
-            interval="preserveStartEnd"
-            height={55}
-            {...axisProps}
-          />
-
-          <YAxis allowDecimals={false} {...axisProps} />
-
-          <Tooltip content={<ChartTooltip />} />
-
-          <Bar
-            dataKey="value"
-            name="Records"
-            fill="#32A6A0"
-            radius={[4, 4, 0, 0]}
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    );
-  }
-
-  if (chart.chart_type === "treemap") {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <Treemap
-          data={data.map((item, index) => ({
-            ...item,
-            name: item.category,
-            size: item.value,
-            fill: CHART_COLORS[index % CHART_COLORS.length],
-          }))}
-          dataKey="size"
-          nameKey="name"
-          stroke="#fff"
-          content={<TreemapContent />}
-        >
-          <Tooltip content={<ChartTooltip />} />
-        </Treemap>
-      </ResponsiveContainer>
-    );
-  }
-
-  return (
-    <div className="chart-no-data">
-      <Info size={20} />
-      <span>Unsupported chart type: {chart.chart_type}</span>
-    </div>
-  );
-}
-
-function TreemapContent({ x, y, width, height, name, fill }) {
+function TreemapContent({ x, y, width, height, name, index }) {
   if (width < 35 || height < 25) return null;
 
   return (
@@ -496,44 +128,410 @@ function TreemapContent({ x, y, width, height, name, fill }) {
         y={y}
         width={width}
         height={height}
-        style={{
-          fill,
-          stroke: "#fff",
-          strokeWidth: 2,
-        }}
+        fill={COLORS[index % COLORS.length]}
+        stroke="#fff"
+        strokeWidth={2}
+        rx={5}
       />
 
-      {width > 65 && height > 35 && (
+      {width > 65 && height > 40 && (
         <text
-          x={x + 7}
-          y={y + 18}
+          x={x + width / 2}
+          y={y + height / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
           fill="#fff"
           fontSize={11}
         >
-          {String(name).slice(0, 15)}
+          {String(name || "").slice(0, 16)}
         </text>
       )}
     </g>
   );
 }
 
-function ChartsPage() {
+function HeatmapChart({ chart }) {
+  const data = getChartData(chart);
+
+  if (!data.length) {
+    return <EmptyChart />;
+  }
+
+  const keys = Object.keys(data[0] || {}).filter(
+    (key) => key !== "name" && key !== "label"
+  );
+
+  if (!keys.length) {
+    return <EmptyChart />;
+  }
+
+  const values = data.flatMap((row) =>
+    keys.map((key) => Number(row[key])).filter(Number.isFinite)
+  );
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  const getOpacity = (value) => {
+    if (max === min) return 0.7;
+    return 0.15 + ((Number(value) - min) / (max - min)) * 0.75;
+  };
+
+  return (
+    <div className="heatmap-wrapper">
+      <table className="heatmap-table">
+        <thead>
+          <tr>
+            <th></th>
+            {keys.map((key) => (
+              <th key={key}>{key}</th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody>
+          {data.map((row, index) => (
+            <tr key={index}>
+              <th>{row.name || row.label || `Row ${index + 1}`}</th>
+
+              {keys.map((key) => (
+                <td
+                  key={key}
+                  title={`${key}: ${formatNumber(row[key])}`}
+                  style={{
+                    background: `rgba(99, 102, 241, ${getOpacity(
+                      row[key]
+                    )})`,
+                  }}
+                >
+                  {formatNumber(row[key])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EmptyChart() {
+  return (
+    <div className="chart-empty">
+      <BarChart3 size={28} />
+      <p>No chart data available</p>
+    </div>
+  );
+}
+
+function RenderChart({ chart }) {
+  if (!chart) return <EmptyChart />;
+
+  const data = getChartData(chart);
+  const type = String(chart.chart_type || chart.type || "bar").toLowerCase();
+
+  const xKey =
+    chart.x_column ||
+    chart.x_key ||
+    chart.xKey ||
+    chart.x_label ||
+    chart.xLabel ||
+    (data[0] ? Object.keys(data[0])[0] : "name");
+
+  const yKey =
+    chart.y_column ||
+    chart.y_key ||
+    chart.yKey ||
+    "value";
+
+  const valueKey = data[0]?.value !== undefined ? "value" : yKey;
+
+  if (!data.length) return <EmptyChart />;
+
+  const commonAxis = (
+    <>
+      <CartesianGrid {...GRID_STYLE} vertical={false} />
+      <XAxis
+        dataKey={xKey}
+        tick={AXIS_STYLE}
+        tickLine={false}
+        axisLine={false}
+      />
+      <YAxis
+        tick={AXIS_STYLE}
+        tickLine={false}
+        axisLine={false}
+        tickFormatter={formatCompact}
+      />
+      <Tooltip content={<ChartTooltip />} />
+    </>
+  );
+
+  if (type === "heatmap") {
+    return <HeatmapChart chart={chart} />;
+  }
+
+  if (type === "pie" || type === "donut") {
+    return (
+      <ResponsiveContainer width="100%" height={290}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey={valueKey}
+            nameKey={xKey}
+            cx="50%"
+            cy="48%"
+            innerRadius={type === "donut" ? 65 : 0}
+            outerRadius={105}
+            paddingAngle={type === "donut" ? 3 : 1}
+            label={({ name, percent }) =>
+              `${String(name || "").slice(0, 12)} ${(
+                percent * 100
+              ).toFixed(0)}%`
+            }
+          >
+            {data.map((entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={COLORS[index % COLORS.length]}
+              />
+            ))}
+          </Pie>
+          <Tooltip content={<ChartTooltip />} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === "horizontal_bar") {
+    return (
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart
+          data={data}
+          layout="vertical"
+          margin={{ left: 15, right: 20 }}
+        >
+          <CartesianGrid {...GRID_STYLE} horizontal={false} />
+          <XAxis
+            type="number"
+            tick={AXIS_STYLE}
+            tickFormatter={formatCompact}
+          />
+          <YAxis
+            type="category"
+            dataKey={xKey}
+            width={100}
+            tick={AXIS_STYLE}
+          />
+          <Tooltip content={<ChartTooltip />} />
+          <Bar
+            dataKey={valueKey}
+            fill={COLORS[0]}
+            radius={[0, 5, 5, 0]}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === "line" || type === "trend") {
+    return (
+      <ResponsiveContainer width="100%" height={290}>
+        <LineChart data={data}>
+          {commonAxis}
+          <Line
+            type="monotone"
+            dataKey={valueKey}
+            stroke={COLORS[0]}
+            strokeWidth={3}
+            dot={{ r: 3 }}
+            activeDot={{ r: 6 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === "area") {
+    return (
+      <ResponsiveContainer width="100%" height={290}>
+        <AreaChart data={data}>
+          {commonAxis}
+          <Area
+            type="monotone"
+            dataKey={valueKey}
+            stroke={COLORS[0]}
+            fill={COLORS[0]}
+            fillOpacity={0.18}
+            strokeWidth={2.5}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === "scatter") {
+    return (
+      <ResponsiveContainer width="100%" height={290}>
+        <ScatterChart>
+          <CartesianGrid {...GRID_STYLE} />
+          <XAxis
+            type="number"
+            dataKey={xKey}
+            name={xKey}
+            tick={AXIS_STYLE}
+          />
+          <YAxis
+            type="number"
+            dataKey={valueKey}
+            name={valueKey}
+            tick={AXIS_STYLE}
+          />
+          <ZAxis range={[50, 50]} />
+          <Tooltip cursor={{ strokeDasharray: "3 3" }} />
+          <Scatter data={data} fill={COLORS[0]} />
+        </ScatterChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === "treemap") {
+    return (
+      <ResponsiveContainer width="100%" height={290}>
+        <Treemap
+          data={data.map((item) => ({
+            ...item,
+            name: item[xKey],
+            size: Number(item[valueKey]) || 0,
+          }))}
+          dataKey="size"
+          nameKey="name"
+          content={<TreemapContent />}
+        />
+      </ResponsiveContainer>
+    );
+  }
+
+  if (type === "histogram") {
+    return (
+      <ResponsiveContainer width="100%" height={290}>
+        <BarChart data={data}>
+          {commonAxis}
+          <Bar
+            dataKey={valueKey}
+            fill={COLORS[1]}
+            radius={[5, 5, 0, 0]}
+          />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  return (
+    <ResponsiveContainer width="100%" height={290}>
+      <BarChart data={data}>
+        {commonAxis}
+        <Bar
+          dataKey={valueKey}
+          fill={COLORS[0]}
+          radius={[5, 5, 0, 0]}
+        />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function SummaryCard({ icon: Icon, label, value, description }) {
+  return (
+    <div className="chart-summary-card">
+      <div className="chart-summary-icon">
+        <Icon size={19} />
+      </div>
+
+      <div>
+        <p>{label}</p>
+        <h3>{value ?? "-"}</h3>
+        {description && <span>{description}</span>}
+      </div>
+    </div>
+  );
+}
+
+function InsightCard({ insight, index }) {
+  const text =
+    typeof insight === "string"
+      ? insight
+      : insight?.message ||
+        insight?.insight ||
+        insight?.description ||
+        insight?.title ||
+        "Insight";
+
+  return (
+    <div className="chart-insight-card" key={index}>
+      <div className="chart-insight-icon">
+        <Lightbulb size={17} />
+      </div>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function ChartCard({ chart, onRemove, custom = false }) {
+  const title =
+    chart.title ||
+    chart.name ||
+    chart.chart_title ||
+    "Data Visualization";
+
+  const description =
+    chart.description ||
+    chart.subtitle ||
+    chart.aggregation ||
+    "";
+
+  return (
+    <div className="chart-visual-card">
+      <div className="chart-visual-header">
+        <div>
+          <h3>{title}</h3>
+          {description && <p>{description}</p>}
+        </div>
+
+        {custom && (
+          <button
+            type="button"
+            className="chart-remove-button"
+            onClick={onRemove}
+            title="Remove chart"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
+      </div>
+
+      <RenderChart chart={chart} />
+    </div>
+  );
+}
+
+export default function ChartsPage() {
   const dataset = useOutletContext();
-  const datasetId = dataset?.dataset_id;
+
+  const datasetId = dataset?.dataset_id || dataset?.id;
 
   const [version, setVersion] = useState("original");
   const [mode, setMode] = useState("ai");
+
   const [dashboard, setDashboard] = useState(null);
-  const [selectedChartId, setSelectedChartId] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [customCharts, setCustomCharts] = useState([]);
+
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchDashboard = async () => {
-    if (!datasetId) {
-      setError("Dataset information is not available. Please upload a dataset first.");
-      setLoading(false);
-      return;
-    }
+  const fetchDashboard = useCallback(async () => {
+    if (!datasetId) return;
 
     setLoading(true);
     setError("");
@@ -547,457 +545,428 @@ function ChartsPage() {
 
       if (!response.ok) {
         throw new Error(
-          result.detail || "Unable to generate the dashboard."
+          result.detail || "Unable to load dashboard."
         );
       }
 
       setDashboard(result);
-
-      const firstSelectedId =
-        result.dashboard_ai?.selected_chart_ids?.[0] ||
-        result.charts?.[0]?.id ||
-        "";
-
-      setSelectedChartId(firstSelectedId);
     } catch (err) {
-      setDashboard(null);
-
-      setError(
-        err.message === "Failed to fetch"
-          ? "Unable to connect to the backend. Check whether FastAPI is running."
-          : err.message
-      );
+      setError(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [datasetId, version]);
 
   useEffect(() => {
     fetchDashboard();
-  }, [datasetId, version]);
+  }, [fetchDashboard]);
 
-  const charts = dashboard?.charts || [];
-  const ai = dashboard?.dashboard_ai || {};
-  const summary = dashboard?.summary || {};
-  const kpis = dashboard?.kpis || [];
+  useEffect(() => {
+    setCustomCharts([]);
+  }, [datasetId]);
 
-  const selectedChart = useMemo(
-    () => charts.find((chart) => chart.id === selectedChartId),
-    [charts, selectedChartId]
-  );
+  const handleCustomChartCreated = (chart) => {
+    if (!chart) return;
 
-  const aiCharts = useMemo(() => {
-    const selectedIds = ai.selected_chart_ids || [];
+    setCustomCharts((previous) => [
+      ...previous,
+      {
+        ...chart,
+        custom_id: `${Date.now()}-${Math.random()}`,
+      },
+    ]);
+  };
 
-    if (!selectedIds.length) return charts;
+  const removeCustomChart = (chartId) => {
+    setCustomCharts((previous) =>
+      previous.filter((chart) => chart.custom_id !== chartId)
+    );
+  };
 
-    const selected = selectedIds
-      .map((id) => charts.find((chart) => chart.id === id))
-      .filter(Boolean);
-
-    return selected.length ? selected : charts;
-  }, [charts, ai.selected_chart_ids]);
-
-  if (loading) {
+  const summary = useMemo(() => {
     return (
-      <div className="charts-loading">
-        <RefreshCw size={28} className="loading-icon" />
-        <h3>Preparing your dashboard...</h3>
-        <p>Analyzing your dataset and generating useful visualizations.</p>
+      dashboard?.summary ||
+      dashboard?.overview ||
+      dashboard?.profile?.overview ||
+      {}
+    );
+  }, [dashboard]);
+
+  const kpis = useMemo(() => {
+    return dashboard?.kpis || dashboard?.metrics || [];
+  }, [dashboard]);
+
+  const charts = useMemo(() => {
+    return (
+      dashboard?.charts ||
+      dashboard?.visualizations ||
+      dashboard?.data?.charts ||
+      []
+    );
+  }, [dashboard]);
+
+  const insights = useMemo(() => {
+    const result =
+      dashboard?.insights ||
+      dashboard?.ai_insights ||
+      dashboard?.data?.insights ||
+      [];
+
+    return Array.isArray(result) ? result : [];
+  }, [dashboard]);
+
+  const chartCount = charts.length + customCharts.length;
+
+  if (!datasetId) {
+    return (
+      <div className="charts-page">
+        <div className="charts-error">
+          <AlertCircle size={20} />
+          <p>Dataset information is missing. Please upload a dataset again.</p>
+        </div>
       </div>
     );
   }
-
-  if (error) {
-    return (
-      <div className="charts-error">
-        <AlertCircle size={30} />
-        <h3>Unable to load dashboard</h3>
-        <p>{error}</p>
-
-        <button onClick={fetchDashboard}>
-          <RefreshCw size={16} />
-          Try again
-        </button>
-      </div>
-    );
-  }
-
-  if (!dashboard) return null;
-
-  const summaryCards = [
-    {
-      label: "Total Records",
-      value: summary.total_rows,
-      icon: Database,
-      color: "purple",
-    },
-    {
-      label: "Total Columns",
-      value: summary.total_columns,
-      icon: Layers,
-      color: "blue",
-    },
-    {
-      label: "Numeric Columns",
-      value: summary.numeric_columns,
-      icon: Hash,
-      color: "green",
-    },
-    {
-      label: "Missing Values",
-      value: summary.missing_values,
-      icon: BarChart3,
-      color: "orange",
-    },
-  ];
 
   return (
     <div className="charts-page">
-      <div className="charts-page-heading">
+      {/* Page heading */}
+      <div className="charts-page-header">
         <div>
-          <span className="page-eyebrow">DATA VISUALIZATION</span>
-          <h1>Analytics Dashboard</h1>
+          <div className="charts-heading-eyebrow">
+            <Sparkles size={15} />
+            DATA ANALYTICS
+          </div>
+
+          <h1>Data Visualization</h1>
+
           <p>
-            Explore your data, discover patterns and understand business performance.
+            Explore your dataset through AI-generated insights and
+            interactive visualizations.
           </p>
         </div>
 
         <button
+          type="button"
           className="charts-refresh-button"
           onClick={fetchDashboard}
+          disabled={loading}
         >
-          <RefreshCw size={16} />
+          <RefreshCw
+            size={16}
+            className={loading ? "charts-spin" : ""}
+          />
           Refresh
         </button>
       </div>
 
+      {/* Dataset version */}
       <div className="charts-toolbar">
-        <div>
-          <Database size={18} />
-          <span>Dataset version</span>
-        </div>
-
-        <div className="version-switch">
+        <div className="charts-version-switch">
           <button
+            type="button"
             className={version === "original" ? "active" : ""}
             onClick={() => setVersion("original")}
           >
-            Original
+            Original Data
           </button>
 
           <button
+            type="button"
             className={version === "cleaned" ? "active" : ""}
             onClick={() => setVersion("cleaned")}
           >
-            Cleaned
+            Cleaned Data
           </button>
+        </div>
+
+        <div className="charts-dataset-label">
+          <Database size={15} />
+          {dataset.filename || "Current dataset"}
         </div>
       </div>
 
-      <div
-        className="charts-summary-grid"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(175px, 1fr))",
-          gap: "12px",
-        }}
-      >
-        {summaryCards.map((item) => {
-          const Icon = item.icon;
-
-          return (
-            <div className="charts-summary-card" key={item.label}>
-              <div className={`summary-icon ${item.color}`}>
-                <Icon size={19} />
-              </div>
-
-              <div>
-                <span>{item.label}</span>
-                <h2>{formatNumber(item.value)}</h2>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {kpis.length > 0 && (
-        <div
-          className="business-kpi-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: "12px",
-            marginTop: "12px",
-          }}
-        >
-          {kpis.map((kpi, index) => (
-            <div className="business-kpi-card" key={index}>
-              <span>{kpi.label}</span>
-              <h3>{formatNumber(kpi.value)}</h3>
-            </div>
-          ))}
+      {/* Error */}
+      {error && (
+        <div className="charts-error">
+          <AlertCircle size={18} />
+          <span>{error}</span>
+          <button type="button" onClick={fetchDashboard}>
+            Retry
+          </button>
         </div>
       )}
 
-      <div className="dashboard-mode-switch">
-        <button
-          className={mode === "ai" ? "active" : ""}
-          onClick={() => setMode("ai")}
-        >
-          <Sparkles size={16} />
-          AI-Generated Dashboard
-        </button>
+      {/* Loading */}
+      {loading && !dashboard && (
+        <div className="charts-loading">
+          <div className="charts-loader" />
+          <p>Preparing your dashboard...</p>
+        </div>
+      )}
 
-        <button
-          className={mode === "custom" ? "active" : ""}
-          onClick={() => setMode("custom")}
-        >
-          <SlidersHorizontal size={16} />
-          Customize Dashboard
-        </button>
-      </div>
-
-      {mode === "ai" ? (
+      {/* Dashboard summary */}
+      {dashboard && (
         <>
-          <section className="ai-dashboard-intro">
-            <div className="ai-intro-icon">
-              <Sparkles size={20} />
-            </div>
+          <div className="charts-summary-grid">
+            <SummaryCard
+              icon={Database}
+              label="Total Rows"
+              value={formatNumber(
+                summary.total_rows ??
+                  summary.rows ??
+                  dataset.profile?.overview?.total_rows
+              )}
+              description="Records in dataset"
+            />
 
-            <div className="ai-intro-content">
-              <span className="ai-label">AI DATA ANALYSIS</span>
-              <h2>{ai.headline || "Your dataset at a glance"}</h2>
+            <SummaryCard
+              icon={Layers}
+              label="Total Columns"
+              value={formatNumber(
+                summary.total_columns ??
+                  summary.columns ??
+                  dataset.profile?.overview?.total_columns
+              )}
+              description="Dataset features"
+            />
 
+            <SummaryCard
+              icon={BarChart3}
+              label="Visualizations"
+              value={formatNumber(chartCount)}
+              description="Available charts"
+            />
+
+            <SummaryCard
+              icon={Activity}
+              label="Insights"
+              value={formatNumber(insights.length)}
+              description="AI observations"
+            />
+          </div>
+
+          {/* KPI section */}
+          {kpis.length > 0 && (
+            <section className="charts-kpi-section">
+              <div className="charts-section-heading">
+                <div>
+                  <h2>Key Performance Indicators</h2>
+                  <p>Important metrics from your dataset</p>
+                </div>
+                <Activity size={19} />
+              </div>
+
+              <div className="charts-kpi-grid">
+                {kpis.map((kpi, index) => {
+                  const label =
+                    kpi.label ||
+                    kpi.name ||
+                    kpi.title ||
+                    `Metric ${index + 1}`;
+
+                  const value =
+                    kpi.value ??
+                    kpi.metric ??
+                    kpi.count ??
+                    "-";
+
+                  return (
+                    <div className="charts-kpi-card" key={index}>
+                      <span>{label}</span>
+                      <strong>
+                        {typeof value === "number"
+                          ? formatNumber(value)
+                          : value}
+                      </strong>
+
+                      {kpi.description && (
+                        <small>{kpi.description}</small>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Mode switch */}
+          <div className="charts-mode-section">
+            <div>
+              <h2>Your Dashboard</h2>
               <p>
-                {ai.summary ||
-                  "Explore the charts below to understand patterns, comparisons and relationships in your dataset."}
+                Switch between automatic analytics and custom charts.
               </p>
             </div>
 
-            <span className="ai-status">
-              {ai.ai_generated ? "AI Generated" : "Automated Analysis"}
-            </span>
-          </section>
+            <div className="charts-mode-switch">
+              <button
+                type="button"
+                className={mode === "ai" ? "active" : ""}
+                onClick={() => setMode("ai")}
+              >
+                <Sparkles size={16} />
+                AI Dashboard
+              </button>
 
-          <section className="charts-section">
-            <div className="charts-section-heading">
-              <div>
-                <h2>Key Visualizations</h2>
-                <p>
-                  Your most useful charts, automatically selected from the dataset.
-                </p>
-              </div>
-
-              <span className="chart-count">
-                {aiCharts.length} Charts
-              </span>
+              <button
+                type="button"
+                className={mode === "interactive" ? "active" : ""}
+                onClick={() => setMode("interactive")}
+              >
+                <SlidersHorizontal size={16} />
+                Interactive Dashboard
+              </button>
             </div>
+          </div>
 
-            <div
-              className="automatic-charts-grid"
-              style={GRID_STYLE}
-            >
-              {aiCharts.map((chart, index) => (
-                <article
-                  className={`visualization-card chart-size-${chart.size || "medium"}`}
-                  key={chart.id || index}
-                  style={CARD_STYLE}
-                >
-                  <div className="visualization-card-heading">
+          {/* AI dashboard */}
+          {mode === "ai" && (
+            <div className="charts-dashboard-content">
+              {insights.length > 0 && (
+                <section className="charts-insights-section">
+                  <div className="charts-section-heading">
                     <div>
-                      <span className="chart-type-label">
-                        {chart.chart_type?.replace("_", " ")}
-                      </span>
-
-                      <h3>{chart.title}</h3>
-
-                      <p className="chart-subtitle">
-                        {chart.subtitle}
+                      <h2>
+                        <Sparkles size={18} />
+                        AI-Generated Insights
+                      </h2>
+                      <p>
+                        Key observations automatically identified
+                        from your data.
                       </p>
                     </div>
-
-                    <Activity size={18} />
                   </div>
 
-                  <div className="visualization-chart-area">
-                    <RenderChart chart={chart} />
+                  <div className="charts-insights-grid">
+                    {insights.map((insight, index) => (
+                      <InsightCard
+                        insight={insight}
+                        index={index}
+                        key={index}
+                      />
+                    ))}
                   </div>
+                </section>
+              )}
 
-                  <div className="chart-card-footer">
-                    <span>{chart.x_label || "Dataset"}</span>
-                    <span>{chart.data?.length || 0} data points</span>
-                  </div>
-
-                  {chart.insight_hint && (
-                    <div className="chart-insight-hint">
-                      <Lightbulb size={15} />
-                      <span>{chart.insight_hint}</span>
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
-
-            {aiCharts.length === 0 && (
-              <div className="empty-charts">
-                <BarChart3 size={30} />
-                <h3>No visualizations available</h3>
-                <p>
-                  This dataset does not have enough suitable data for charts.
-                </p>
-              </div>
-            )}
-          </section>
-
-          <section className="ai-insights-section">
-            <div className="charts-section-heading">
-              <div>
-                <h2>Business Insights</h2>
-                <p>
-                  Understand what the patterns could mean for your analysis.
-                </p>
-              </div>
-
-              <span className="insight-count">
-                {(ai.insights || []).length} Insights
-              </span>
-            </div>
-
-            {(ai.insights || []).length > 0 ? (
-              <div
-                className="business-insights-grid"
-                style={GRID_STYLE}
-              >
-                {ai.insights.map((insight, index) => (
-                  <article className="business-insight-card" key={index}>
-                    <div className="insight-number">
-                      {String(index + 1).padStart(2, "0")}
-                    </div>
-
-                    <div>
-                      <h3>{insight.title}</h3>
-                      <p>{insight.observation}</p>
-
-                      {insight.business_impact && (
-                        <div className="insight-detail">
-                          <strong>Why it matters</strong>
-                          <span>{insight.business_impact}</span>
-                        </div>
-                      )}
-
-                      {insight.suggestion && (
-                        <div className="insight-detail">
-                          <strong>Suggested next step</strong>
-                          <span>{insight.suggestion}</span>
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-charts">
-                <Lightbulb size={25} />
-                <h3>No additional insights available</h3>
-                <p>Use the charts above to explore the dataset.</p>
-              </div>
-            )}
-          </section>
-        </>
-      ) : (
-        <section className="chart-builder-section">
-          <div className="charts-section-heading">
-            <div>
-              <h2>Customize Your Dashboard</h2>
-              <p>
-                Choose a generated chart to inspect it in more detail.
-              </p>
-            </div>
-          </div>
-
-          <div className="chart-builder-card">
-            <div className="chart-builder-controls">
-              <div className="chart-control">
-                <label htmlFor="custom-chart-select">
-                  Select visualization
-                </label>
-
-                <select
-                  id="custom-chart-select"
-                  value={selectedChartId}
-                  onChange={(event) =>
-                    setSelectedChartId(event.target.value)
-                  }
-                >
-                  <option value="">Choose a chart</option>
-
-                  {charts.map((chart) => (
-                    <option key={chart.id} value={chart.id}>
-                      {chart.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="chart-control">
-                <label>Dataset version</label>
-
-                <select
-                  value={version}
-                  onChange={(event) => setVersion(event.target.value)}
-                >
-                  <option value="original">Original</option>
-                  <option value="cleaned">Cleaned</option>
-                </select>
-              </div>
-            </div>
-
-            {selectedChart ? (
-              <>
-                <div className="selected-chart-heading">
+              <section className="charts-visualizations-section">
+                <div className="charts-section-heading">
                   <div>
-                    <h3>{selectedChart.title}</h3>
-                    <p>{selectedChart.subtitle}</p>
+                    <h2>Visual Analytics</h2>
+                    <p>
+                      Automatically generated charts based on your
+                      dataset.
+                    </p>
                   </div>
 
-                  <span>{selectedChart.chart_type}</span>
+                  <span className="charts-count-label">
+                    {charts.length} charts
+                  </span>
                 </div>
 
-                <RenderChart
-                  chart={selectedChart}
-                  height={360}
-                />
-
-                {selectedChart.insight_hint && (
-                  <div className="chart-insight-hint custom-chart-hint">
-                    <Lightbulb size={16} />
-                    <span>{selectedChart.insight_hint}</span>
+                {charts.length > 0 ? (
+                  <div className="charts-visual-grid">
+                    {charts.map((chart, index) => (
+                      <ChartCard
+                        key={chart.id || chart.chart_id || index}
+                        chart={chart}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="charts-empty-state">
+                    <BarChart3 size={32} />
+                    <h3>No automatic charts available</h3>
+                    <p>
+                      This dataset does not have enough suitable
+                      information for automatic visualizations.
+                    </p>
                   </div>
                 )}
-              </>
-            ) : (
-              <div className="chart-builder-empty">
-                <SlidersHorizontal size={35} />
-                <h3>Choose a visualization</h3>
-                <p>
-                  Select one of the generated charts to preview it here.
-                </p>
-              </div>
-            )}
-          </div>
+              </section>
+            </div>
+          )}
 
-          <div className="customize-note">
-            <Info size={17} />
-            <p>
-              Custom column selection, aggregation, chart type changes and
-              filters will be enabled after the custom chart calculation API is added.
-            </p>
-          </div>
-        </section>
+          {/* Interactive dashboard */}
+          {mode === "interactive" && (
+            <div className="charts-interactive-content">
+              <div className="charts-interactive-intro">
+                <div className="charts-interactive-icon">
+                  <SlidersHorizontal size={22} />
+                </div>
+
+                <div>
+                  <h2>Build Your Own Charts</h2>
+                  <p>
+                    Choose columns, chart types and aggregations to
+                    create visualizations from your dataset.
+                  </p>
+                </div>
+              </div>
+
+              <InteractiveChartBuilder
+                datasetId={datasetId}
+                version={version}
+                onChartCreated={handleCustomChartCreated}
+              />
+
+              <section className="charts-custom-section">
+                <div className="charts-section-heading">
+                  <div>
+                    <h2>
+                      <BarChart3 size={18} />
+                      My Custom Charts
+                    </h2>
+                    <p>
+                      Charts you have created for this dataset version.
+                    </p>
+                  </div>
+
+                  <span className="charts-count-label">
+                    {customCharts.length} charts
+                  </span>
+                </div>
+
+                {customCharts.length > 0 ? (
+                  <div className="charts-visual-grid">
+                    {customCharts.map((chart) => (
+                      <ChartCard
+                        key={chart.custom_id}
+                        chart={chart}
+                        custom
+                        onRemove={() =>
+                          removeCustomChart(chart.custom_id)
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="charts-empty-state">
+                    <Plus size={32} />
+                    <h3>Your custom dashboard is empty</h3>
+                    <p>
+                      Create your first chart using the builder above.
+                      It will appear here.
+                    </p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Dashboard unavailable */}
+      {!loading && !dashboard && !error && (
+        <div className="charts-empty-state">
+          <Info size={30} />
+          <h3>Dashboard is not available</h3>
+          <p>
+            Try refreshing the dashboard or uploading your dataset again.
+          </p>
+        </div>
       )}
     </div>
   );
 }
-
-export default ChartsPage;
