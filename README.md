@@ -1,4 +1,4 @@
-# DataLens 📊
+# DataLens 📊 
 
 **AI-Powered Data Quality & Analytics Copilot**
 
