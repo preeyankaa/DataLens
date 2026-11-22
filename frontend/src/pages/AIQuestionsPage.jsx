@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,6 +8,7 @@ import {
   User,
   RotateCcw,
 } from "lucide-react";
+import "./AIQuestionsPage.css";
 
 function AIQuestionsPage({ dataset }) {
   const [question, setQuestion] = useState("");
@@ -60,7 +60,7 @@ function AIQuestionsPage({ dataset }) {
           body: JSON.stringify({
             question: trimmedQuestion,
             version,
-            history: previousMessages.slice(-8).map((message) => ({
+            history: previousMessages.slice(-6).map((message) => ({
               role: message.role,
               content: message.content,
             })),

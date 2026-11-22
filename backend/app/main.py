@@ -15,10 +15,8 @@ from app.quality import check_data_quality
 from app.cleaning import clean_dataframe
 from app.ai_service import ask_groq, generate_dashboard_insights
 from app.data_analysis import build_dataset_context
-from app.visualization import (
-    build_visualization_data,
-    build_custom_chart,
-)
+from app.dashboard_builder import build_dashboard_data
+from app.visualization import (build_visualization_data, build_custom_chart)
 
 
 # --------------------------------------------------
@@ -77,6 +75,14 @@ datasets = {}
 # Store cleaned versions separately
 cleaned_datasets = {}
 
+
+
+def get_df(dataset_id: str, version: str = "cleaned"):
+    if dataset_id not in datasets:
+        raise HTTPException(status_code=404, detail="Dataset not found.")
+    if version == "cleaned" and dataset_id in cleaned_datasets:
+        return cleaned_datasets[dataset_id], True
+    return datasets[dataset_id], False
 
 # --------------------------------------------------
 # 4. Home and health-check endpoints
@@ -539,45 +545,25 @@ def get_dataset_charts(
 @app.get("/api/v1/datasets/{dataset_id}/dashboard")
 async def get_ai_dashboard(
     dataset_id: str,
-    version: str = "original",
+    version: str = "cleaned",
 ):
-
-    if dataset_id not in datasets:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
-
-    if version == "original":
-        df = datasets[dataset_id]
-
-    elif version == "cleaned":
-        if dataset_id not in cleaned_datasets:
-            raise HTTPException(
-                status_code=404,
-                detail="Cleaned dataset not available. Apply cleaning first.",
-            )
-
-        df = cleaned_datasets[dataset_id]
-
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Version must be original or cleaned.",
-        )
+    df, using_cleaned = get_df(dataset_id, version)
 
     try:
-        visualization = build_visualization_data(df)
+        visualization = build_dashboard_data(df)
 
-        dashboard_ai = generate_dashboard_insights(
-            charts=visualization["charts"],
-            summary=visualization["summary"],
-            version=version,
-        )
+        try:
+            dashboard_ai = generate_dashboard_insights(
+                charts=visualization["charts"],
+                summary=visualization["summary"],
+                version="cleaned" if using_cleaned else "original",
+            )
+        except Exception:
+            dashboard_ai = None  # AI fail ho to bhi dashboard chale
 
         return {
             "dataset_id": dataset_id,
-            "version": version,
+            "using_cleaned": using_cleaned,
             **visualization,
             "dashboard_ai": dashboard_ai,
         }
@@ -588,7 +574,6 @@ async def get_ai_dashboard(
             detail=f"Unable to generate AI dashboard: {str(error)}",
         )
 
-
 # --------------------------------------------------
 # 13. Custom interactive chart endpoint
 # --------------------------------------------------
@@ -597,36 +582,10 @@ async def get_ai_dashboard(
 def create_custom_chart(
     dataset_id: str,
     request: CustomChartRequest,
-    version: str = "original",
+    version: str = "cleaned",
 ):
 
-    # Check whether dataset exists
-    if dataset_id not in datasets:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found. Please upload the CSV again.",
-        )
-
-    # Validate requested version
-    if version not in ["original", "cleaned"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Version must be 'original' or 'cleaned'.",
-        )
-
-    # Select dataset version
-    if version == "cleaned":
-
-        if dataset_id not in cleaned_datasets:
-            raise HTTPException(
-                status_code=404,
-                detail="Cleaned dataset not found. Clean the dataset first.",
-            )
-
-        df = cleaned_datasets[dataset_id]
-
-    else:
-        df = datasets[dataset_id]
+    df, _ = get_df(dataset_id, version)
 
     # Generate custom chart
     try:

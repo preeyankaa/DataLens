@@ -1,5 +1,4 @@
-
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, Link } from "react-router-dom";
 import {
   LayoutDashboard,
   Broom,
@@ -38,10 +37,10 @@ function WorkspaceLayout({ dataset }) {
   return (
     <div className="workspace">
       <aside className="workspace-sidebar">
-        <div className="workspace-brand">
-          <Database size={25} />
-          <h2>DataLens</h2>
-        </div>
+      <Link to="/" className="workspace-brand" title="Back to home">
+        <Database size={25} />
+        <h2>DataLens</h2>
+      </Link>
 
         <div className="sidebar-section">
           <p className="sidebar-label">WORKSPACE</p>

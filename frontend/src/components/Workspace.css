@@ -592,3 +592,10 @@
 }
 
 
+a.workspace-brand {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+
