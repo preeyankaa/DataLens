@@ -561,21 +561,76 @@ const INSIGHT_TAGS = {
   risk: { label: "Watch out", color: "#f97316" },
   opportunity: { label: "Opportunity", color: "#10b981" },
   info: { label: "Good to know", color: "#6366f1" },
+  ai: { label: "AI summary", color: "#8b5cf6" },
 };
 
+const CONFIDENCE = {
+  high: "High confidence",
+  medium: "Medium confidence",
+  low: "Low confidence",
+};
+
+function EvidencePanel({ evidence }) {
+  return (
+    <div className="chart-evidence">
+      {evidence.columns?.length > 0 && (
+        <div className="chart-evidence-row">
+          <span>Columns used</span>
+          <div className="chart-evidence-chips">
+            {evidence.columns.map((c) => (
+              <code key={c}>{c}</code>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="chart-evidence-row">
+        <span>How it was calculated</span>
+        <p>{evidence.method}</p>
+      </div>
+
+      <div className="chart-evidence-row">
+        <span>Rows used</span>
+        <p>{formatNumber(evidence.rows)}</p>
+      </div>
+
+      {evidence.table?.length > 0 && (
+        <table className="chart-evidence-table">
+          <tbody>
+            {evidence.table.map((row, i) => (
+              <tr key={i}>
+                <td>{row.label}</td>
+                <td>{row.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {evidence.note && <p className="chart-evidence-note">{evidence.note}</p>}
+    </div>
+  );
+}
+
 function InsightCard({ insight, index }) {
+  const [open, setOpen] = useState(false);
+
   const isText = typeof insight === "string";
   const title = isText ? null : insight?.title || insight?.headline || null;
   const text = isText
     ? insight
     : insight?.message ||
+      insight?.observation ||
       insight?.insight ||
       insight?.description ||
       insight?.text ||
       insight?.title ||
       "Insight";
-  const action = isText ? null : insight?.recommendation || insight?.action;
+  const action = isText
+    ? null
+    : insight?.recommendation || insight?.suggestion || insight?.action;
   const tag = isText ? null : INSIGHT_TAGS[insight?.type];
+  const evidence = isText ? null : insight?.evidence;
 
   return (
     <div
@@ -585,11 +640,32 @@ function InsightCard({ insight, index }) {
       <div className="chart-insight-icon">
         <Lightbulb size={17} />
       </div>
-      <div>
-        {tag && <span className="chart-insight-tag">{tag.label}</span>}
+      <div className="chart-insight-body">
+        <div className="chart-insight-tags">
+          {tag && <span className="chart-insight-tag">{tag.label}</span>}
+          {evidence?.confidence && (
+            <span className={`chart-confidence confidence-${evidence.confidence}`}>
+              {CONFIDENCE[evidence.confidence]}
+            </span>
+          )}
+        </div>
+
         {title && title !== text && <h4>{title}</h4>}
         <p>{text}</p>
         {action && <span className="chart-insight-action">{action}</span>}
+
+        {evidence && (
+          <>
+            <button
+              type="button"
+              className="chart-evidence-toggle"
+              onClick={() => setOpen((value) => !value)}
+            >
+              {open ? "Hide calculation" : "How we calculated this"}
+            </button>
+            {open && <EvidencePanel evidence={evidence} />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -650,30 +726,30 @@ const collectInsights = (dashboard) => {
   const ai = dashboard?.dashboard_ai;
   const list = [...asList(dashboard?.insights)];
 
-  if (ai && typeof ai === "object" && !Array.isArray(ai)) {
-    ["insights", "key_insights", "findings", "recommendations"].forEach((k) =>
-      list.push(...asList(ai[k]))
-    );
-  } else {
-    list.push(...asList(ai));
+  // AI commentary is shown only when the AI really wrote it
+  if (ai && typeof ai === "object" && ai.ai_generated) {
+    asList(ai.insights).forEach((item) => {
+      if (item && typeof item === "object") list.push({ ...item, type: "ai" });
+    });
   }
 
   const seen = new Set();
   return list
     .filter((item) => {
       const key =
-        typeof item === "string" ? item : item?.message || item?.title || "";
+        typeof item === "string"
+          ? item
+          : item?.message || item?.observation || item?.title || "";
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
     })
-    .slice(0, 9);
+    .slice(0, 11);
 };
 
 const getSummaryText = (dashboard) => {
   const ai = dashboard?.dashboard_ai;
-  if (typeof ai === "string") return ai;
-  if (ai && typeof ai === "object") {
+  if (ai && typeof ai === "object" && ai.ai_generated) {
     const text = ai.summary || ai.executive_summary || ai.overview;
     return typeof text === "string" ? text : "";
   }
@@ -697,6 +773,108 @@ const getChartInsightMap = (dashboard) => {
   return map;
 };
 
+/* ---------------- confirm columns ---------------- */
+
+const ROLE_FIELDS = [
+  { key: "revenue", label: "Sales / revenue amount", types: ["numeric"] },
+  { key: "quantity", label: "Quantity", types: ["numeric"] },
+  { key: "date", label: "Date", types: ["date", "categorical"] },
+  { key: "order_id", label: "Order ID", types: null },
+  { key: "customer", label: "Customer", types: null },
+  { key: "product", label: "Product", types: null },
+  { key: "returned", label: "Returned (0/1)", types: ["numeric", "categorical"] },
+  { key: "discount", label: "Discount", types: ["numeric"] },
+];
+
+function RolePanel({ detected, columns, ignored, hasOverrides, onApply, onReset }) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(detected || {});
+
+  useEffect(() => {
+    setDraft(detected || {});
+  }, [detected]);
+
+  if (!detected) return null;
+
+  const optionsFor = (field) => {
+    const all = Array.isArray(columns) ? columns : [];
+    const filtered = field.types
+      ? all.filter((c) => field.types.includes(c.type))
+      : all;
+    const names = filtered.map((c) => c.name);
+    const current = draft[field.key];
+    if (current && !names.includes(current)) names.unshift(current);
+    return names;
+  };
+
+  const summary = ROLE_FIELDS.filter((f) => detected[f.key]).map(
+    (f) => `${f.label}: ${detected[f.key]}`
+  );
+
+  return (
+    <section className="charts-roles">
+      <div className="charts-roles-head">
+        <div>
+          <h3>How we read your columns</h3>
+          <p>
+            {summary.length > 0
+              ? summary.join("  |  ")
+              : "No sales-style columns were found, so generic analysis is shown."}
+          </p>
+          {ignored?.length > 0 && (
+            <p className="charts-roles-ignored">
+              ID columns left out of charts: {ignored.join(", ")}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          className="charts-roles-toggle"
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? "Close" : "Check or change"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="charts-roles-body">
+          <div className="charts-roles-grid">
+            {ROLE_FIELDS.map((field) => (
+              <label key={field.key} className="charts-roles-field">
+                <span>{field.label}</span>
+                <select
+                  value={draft[field.key] || ""}
+                  onChange={(e) =>
+                    setDraft((prev) => ({ ...prev, [field.key]: e.target.value }))
+                  }
+                >
+                  <option value="">Not in my data</option>
+                  {optionsFor(field).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+
+          <div className="charts-roles-actions">
+            <button type="button" className="charts-roles-apply" onClick={() => onApply(draft)}>
+              Update dashboard
+            </button>
+            {hasOverrides && (
+              <button type="button" className="charts-roles-reset" onClick={onReset}>
+                Back to automatic
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /* ---------------- page ---------------- */
 
 export default function ChartsPage() {
@@ -706,38 +884,50 @@ export default function ChartsPage() {
   const [mode, setMode] = useState("ai");
   const [dashboard, setDashboard] = useState(null);
   const [customCharts, setCustomCharts] = useState([]);
+  const [roleOverrides, setRoleOverrides] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchDashboard = useCallback(async () => {
-    if (!datasetId) return;
+  const fetchDashboard = useCallback(
+    async (force = false) => {
+      if (!datasetId) return;
 
-    setLoading(true);
-    setError("");
+      setLoading(true);
+      setError("");
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/v1/datasets/${datasetId}/dashboard?version=${VERSION}`
-      );
-      const result = await response.json();
+      try {
+        const params = new URLSearchParams({ version: VERSION });
 
-      if (!response.ok) {
-        throw new Error(result.detail || "Unable to load dashboard.");
+        if (Object.keys(roleOverrides).length > 0) {
+          params.set("roles", JSON.stringify(roleOverrides));
+        }
+        if (force === true) params.set("refresh", "true");
+
+        const response = await fetch(
+          `${API_URL}/api/v1/datasets/${datasetId}/dashboard?${params.toString()}`
+        );
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.detail || "Unable to load dashboard.");
+        }
+        setDashboard(result);
+      } catch (err) {
+        setError(err.message || "Something went wrong.");
+      } finally {
+        setLoading(false);
       }
-      setDashboard(result);
-    } catch (err) {
-      setError(err.message || "Something went wrong.");
-    } finally {
-      setLoading(false);
-    }
-  }, [datasetId]);
+    },
+    [datasetId, roleOverrides]
+  );
 
   useEffect(() => {
-    fetchDashboard();
+    fetchDashboard(false);
   }, [fetchDashboard]);
 
   useEffect(() => {
     setCustomCharts([]);
+    setRoleOverrides({});
   }, [datasetId]);
 
   const handleCustomChartCreated = (chart) => {
@@ -796,7 +986,7 @@ export default function ChartsPage() {
         <button
           type="button"
           className="charts-refresh-button"
-          onClick={fetchDashboard}
+          onClick={() => fetchDashboard(true)}
           disabled={loading}
         >
           <RefreshCw size={16} className={loading ? "charts-spin" : ""} />
@@ -818,11 +1008,22 @@ export default function ChartsPage() {
         )}
       </div>
 
+      {dashboard && (
+        <RolePanel
+          detected={dashboard.detected_roles}
+          columns={dashboard.columns}
+          ignored={dashboard.ignored_id_columns}
+          hasOverrides={Object.keys(roleOverrides).length > 0}
+          onApply={(draft) => setRoleOverrides(draft)}
+          onReset={() => setRoleOverrides({})}
+        />
+      )}
+
       {error && (
         <div className="charts-error">
           <AlertCircle size={18} />
           <span>{error}</span>
-          <button type="button" onClick={fetchDashboard}>
+          <button type="button" onClick={() => fetchDashboard(true)}>
             Retry
           </button>
         </div>
@@ -912,7 +1113,13 @@ export default function ChartsPage() {
 
           {mode === "ai" && (
             <div className="charts-dashboard-content">
-              {summaryText && <div className="charts-ai-summary">{summaryText}</div>}
+              {summaryText && (
+                <div className="charts-ai-summary">
+                  <strong>AI summary</strong>
+                  <p>{summaryText}</p>
+                  <small>Written by AI from the verified numbers on this page.</small>
+                </div>
+              )}
 
               {insights.length > 0 && (
                 <section className="charts-insights-section">

@@ -814,3 +814,254 @@
   font-size: 10.5px;
   font-weight: 700;
 }
+
+/* ---------- trust: evidence, confidence, confirm columns ---------- */
+
+.chart-insight-body {
+  min-width: 0;
+}
+
+.chart-insight-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.chart-insight-tags .chart-insight-tag {
+  margin-bottom: 0;
+}
+
+.chart-confidence {
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.confidence-high {
+  background: #dcf7e9;
+  color: #0f8a55;
+}
+
+.confidence-medium {
+  background: #fff1d6;
+  color: #a86b00;
+}
+
+.confidence-low {
+  background: #fde4ea;
+  color: #cc2b55;
+}
+
+.chart-evidence-toggle {
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chart-evidence {
+  margin-top: 10px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #ebeaf3;
+  border-radius: 9px;
+}
+
+.chart-evidence-row {
+  margin-bottom: 9px;
+}
+
+.chart-evidence-row > span {
+  display: block;
+  margin-bottom: 3px;
+  color: #8d8aa0;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.chart-evidence-row p {
+  margin: 0;
+  color: #4d4a62;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.chart-evidence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.chart-evidence-chips code {
+  padding: 2px 7px;
+  background: #f1f0f8;
+  border-radius: 5px;
+  color: #3d3b52;
+  font-size: 11.5px;
+}
+
+.chart-evidence-table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.chart-evidence-table td {
+  padding: 6px 4px;
+  border-top: 1px solid #f0eff4;
+  color: #4d4a62;
+}
+
+.chart-evidence-table td:last-child {
+  text-align: right;
+  font-weight: 600;
+  color: #25243a;
+}
+
+.chart-evidence-note {
+  margin: 8px 0 0;
+  color: #8d8aa0;
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+.charts-ai-summary strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #8b5cf6;
+  font-size: 12px;
+}
+
+.charts-ai-summary p {
+  margin: 0;
+}
+
+.charts-ai-summary small {
+  display: block;
+  margin-top: 6px;
+  color: #8d8aa0;
+  font-size: 11px;
+}
+
+.charts-roles {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #eeedf3;
+  border-radius: 12px;
+}
+
+.charts-roles-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.charts-roles-head h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.charts-roles-head p {
+  margin: 0;
+  color: #6b6880;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.charts-roles-head .charts-roles-ignored {
+  margin-top: 3px;
+  color: #8d8aa0;
+}
+
+.charts-roles-toggle,
+.charts-roles-reset {
+  flex-shrink: 0;
+  padding: 7px 13px;
+  border: 1px solid #e6e4ef;
+  border-radius: 8px;
+  background: #fff;
+  color: #56536b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.charts-roles-toggle:hover,
+.charts-roles-reset:hover {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+.charts-roles-body {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #f0eff4;
+}
+
+.charts-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.charts-roles-field span {
+  display: block;
+  margin-bottom: 5px;
+  color: #55536a;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.charts-roles-field select {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid #e5e3ed;
+  border-radius: 7px;
+  background: #fff;
+  color: #464359;
+  font-size: 12px;
+}
+
+.charts-roles-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.charts-roles-apply {
+  padding: 8px 15px;
+  border: none;
+  border-radius: 8px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .charts-roles-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .charts-roles-head {
+    flex-direction: column;
+  }
+
+  .charts-roles-grid {
+    grid-template-columns: 1fr;
+  }
+}

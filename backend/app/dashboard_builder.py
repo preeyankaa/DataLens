@@ -33,6 +33,8 @@ from app.visualization import (
     _scatter_chart,
     _histogram_chart,
     MIN_GROUP_RECORDS,
+    _build_kpis,
+    _parse_dates,
 )
 
 MAX_DIM = 15          # max categories for donut / heatmap / treemap dimensions
@@ -407,6 +409,8 @@ def _select_diverse(charts, limit):
 # Rules used everywhere:
 #   * talk in percentages and ratios, never assume a currency or a scale
 #   * every insight says what it means and what to try next
+#   * every insight carries `evidence`: columns, method, rows, a small table
+#     and a confidence level, so the user can verify it themselves
 #   * small samples and weak evidence get a caution instead of a strong claim
 # --------------------------------------------------------------------------
 
@@ -427,11 +431,45 @@ def _fmt(v):
     return f"{v:,.2f}"
 
 
-def _ins(kind, title, message, rec=None):
+def _conf(rows, span=None):
+    level = 2
+    if rows < 30:
+        level = 0
+    elif rows < 200:
+        level = 1
+    if span is not None:
+        if span < 14:
+            level = 0
+        elif span < 30:
+            level = min(level, 1)
+    return ["low", "medium", "high"][level]
+
+
+def _ev(columns, method, rows, table=None, confidence=None, note=None):
+    evidence = {
+        "columns": [str(c) for c in columns if c],
+        "method": method,
+        "rows": int(rows),
+        "confidence": confidence or _conf(rows),
+    }
+    if table:
+        evidence["table"] = table
+    if note:
+        evidence["note"] = note
+    return evidence
+
+
+def _ins(kind, title, message, rec=None, evidence=None):
     item = {"type": kind, "title": title, "message": message}
     if rec:
         item["recommendation"] = rec
+    if evidence:
+        item["evidence"] = evidence
     return item
+
+
+def _rows_used(df, column):
+    return int(_clean_numeric(df[column]).notna().sum())
 
 
 def _grouped(df, cat, metric, agg):
@@ -445,11 +483,21 @@ def _grouped(df, cat, metric, agg):
     return g[g.index != "(Missing)"]
 
 
+def _group_table(g, total=None, n=6):
+    table = []
+    for name, value in list(g.items())[:n]:
+        text = _fmt(value)
+        if total:
+            text += f" ({value / total * 100:.0f}%)"
+        table.append({"label": str(name), "value": text})
+    return table
+
+
 def _ins_trend(df, ctx, out):
     m, agg = ctx["measure"], ctx["agg"]
     if not m or not ctx["dates"]:
         return
-    _, parsed = next(iter(ctx["dates"].items()))
+    date_col, parsed = next(iter(ctx["dates"].items()))
     f = pd.DataFrame({"d": parsed, "v": _clean_numeric(df[m])}).dropna()
     if len(f) < 10:
         return
@@ -473,23 +521,36 @@ def _ins_trend(df, ctx, out):
     word = "total" if agg == "sum" else "average"
     caution = " The date range is short, so treat this as an early signal." if span < 30 else ""
 
+    evidence = _ev(
+        [m, date_col],
+        f"Split your date range in two equal halves and compared {word} {m} per day in each half.",
+        len(f),
+        [
+            {"label": "Date range", "value": f"{f['d'].min().date()} to {f['d'].max().date()} ({span + 1} days)"},
+            {"label": "Earlier half, per day", "value": _fmt(va)},
+            {"label": "Later half, per day", "value": _fmt(vb)},
+            {"label": "Change", "value": f"{g:+.1f}%"},
+        ],
+        _conf(len(f), span),
+    )
+
     if g >= 10:
         out.append(_ins(
             "opportunity", f"{m} is growing",
             f"{word.capitalize()} {m} per day in the later half of your data is {g:.0f}% higher than in the earlier half.{caution}",
-            "Find out what changed (new product, offer, season) and keep doing it.",
+            "Find out what changed (new product, offer, season) and keep doing it.", evidence,
         ))
     elif g <= -10:
         out.append(_ins(
             "risk", f"{m} is slowing down",
             f"{word.capitalize()} {m} per day in the later half of your data is {abs(g):.0f}% lower than in the earlier half.{caution}",
-            "Check what changed in that period: stock, prices, campaigns, or a drop in repeat customers.",
+            "Check what changed in that period: stock, prices, campaigns, or a drop in repeat customers.", evidence,
         ))
     else:
         out.append(_ins(
             "info", f"{m} is steady",
             f"{word.capitalize()} {m} per day is about the same in both halves of your data ({g:+.0f}%).{caution}",
-            "Steady is fine, but try one new offer or channel to see if you can lift it.",
+            "Steady is fine, but try one new offer or channel to see if you can lift it.", evidence,
         ))
 
 
@@ -497,38 +558,49 @@ def _ins_concentration(df, ctx, out):
     m, agg = ctx["measure"], ctx["agg"]
     if not m:
         return
+    rows = _rows_used(df, m)
     for dim in ctx["dims"][:2]:
         g = _grouped(df, dim, m, agg)
         if len(g) < 2 or g.sum() <= 0:
             continue
         top, low = g.index[0], g.index[-1]
+
         if agg == "sum":
             total = g.sum()
             share, s2 = g.iloc[0] / total * 100, g.iloc[1] / total * 100
             low_share = g.iloc[-1] / total * 100
+            evidence = _ev(
+                [dim, m],
+                f"Added up {m} for each {dim}. Share = that group's total divided by the total of all groups.",
+                rows, _group_table(g, total),
+            )
             if share >= 50:
                 out.append(_ins(
                     "risk", f"{m} depends on one {dim}",
                     f"{top} brings {share:.0f}% of total {m}. The next one, {g.index[1]}, brings {s2:.0f}%.",
                     f"If {top} has a bad month, your numbers drop sharply. Try to grow the other {dim} groups.",
+                    evidence,
                 ))
             elif g.iloc[0] < 1.25 * g.iloc[-1]:
                 out.append(_ins(
                     "info", f"{m} is evenly spread across {dim}",
                     f"No {dim} group stands out: the best ({top}) and the weakest ({low}) are close ({share:.0f}% vs {low_share:.0f}%).",
                     f"Growth is more likely to come from other levers (price, new products, channels) than from this {dim}.",
+                    evidence,
                 ))
             else:
                 out.append(_ins(
                     "opportunity", f"Best and weakest {dim}",
                     f"{top} is the strongest {dim} ({share:.0f}% of {m}). {low} is the weakest ({low_share:.0f}%).",
                     f"Look at why {top} works and try the same for {low}, or decide if {low} deserves less effort.",
+                    evidence,
                 ))
         else:
             out.append(_ins(
                 "info", f"{m} differs by {dim}",
                 f"Average {m} is highest for {top} ({_fmt(g.iloc[0])}) and lowest for {low} ({_fmt(g.iloc[-1])}).",
                 f"Check what is different about {top} (pricing, customers, product mix).",
+                _ev([dim, m], f"Average {m} for each {dim}.", rows, _group_table(g)),
             ))
 
 
@@ -544,11 +616,16 @@ def _ins_pareto(df, ctx, out):
         k = max(1, int(round(n * 0.2)))
         share = g.iloc[:k].sum() / g.sum() * 100
         if share >= 60:
+            table = _group_table(g, g.sum(), 5)
+            table.append({"label": f"Top {k} of {n} together", "value": f"{share:.0f}% of total"})
             out.append(_ins(
                 "risk" if share >= 80 else "info",
                 f"A few {ent} values carry most of {m}",
                 f"The top {k} of {n} {ent} values (20%) bring {share:.0f}% of total {m}.",
                 f"Keep these top {ent} values in stock, well served and well priced. Losing one would be felt.",
+                _ev([ent, m],
+                    f"Added up {m} for each {ent}, ranked them, and added the top 20% ({k} of {n}).",
+                    _rows_used(df, m), table),
             ))
 
 
@@ -574,16 +651,25 @@ def _ins_returns(df, ctx, out):
         top = g["mean"].idxmax()
         val = g.loc[top, "mean"] * 100
         if worst is None or val > worst[2]:
-            worst = (dim, top, val)
+            worst = (dim, top, val, int(g.loc[top, "count"]))
 
     msg = f"{rate:.1f}% of records are returned."
     kind = "risk" if rate >= 10 else "info"
     rec = "Read the return reasons and fix the biggest cause (quality, size, description)."
+    table = [{"label": "Returned records", "value": f"{int(valid.sum())} of {len(valid)} ({rate:.1f}%)"}]
+
     if worst and worst[2] >= max(5, rate * 1.5):
         msg += f" {worst[1]} ({worst[0]}) is the highest at {worst[2]:.1f}%."
         rec = f"Start with {worst[1]}: check product quality, listing accuracy and delivery for it."
         kind = "risk"
-    out.append(_ins(kind, "Returns", msg, rec))
+        table.append({"label": f"Highest: {worst[1]} ({worst[0]})", "value": f"{worst[2]:.1f}% of {worst[3]} records"})
+
+    out.append(_ins(
+        kind, "Returns", msg, rec,
+        _ev([ret] + ([worst[0]] if worst else []),
+            f"Share of records where {ret} is 1. Groups with fewer than {MIN_GROUP_RECORDS} records are ignored.",
+            len(valid), table),
+    ))
 
 
 def _ins_orders(df, ctx, out):
@@ -605,7 +691,20 @@ def _ins_orders(df, ctx, out):
         rec = "Most orders have one item. Bundles or an 'add one more' offer can raise order value."
     else:
         rec = "Many orders have several items. Bundles and a free-delivery threshold can push this higher."
-    out.append(_ins("opportunity", "Order value", msg, rec))
+
+    out.append(_ins(
+        "opportunity", "Order value", msg, rec,
+        _ev([oid, rev],
+            f"Added up {rev} for each {oid}, then averaged across orders.",
+            len(frame),
+            [
+                {"label": "Orders", "value": f"{len(totals)}"},
+                {"label": "Average order", "value": _fmt(aov)},
+                {"label": "Typical (median) order", "value": _fmt(med)},
+                {"label": "Orders with 2+ lines", "value": f"{multi:.0f}%"},
+            ],
+            _conf(len(totals))),
+    ))
 
 
 def _ins_repeat(df, ctx, out):
@@ -617,17 +716,30 @@ def _ins_repeat(df, ctx, out):
     if len(g) < 10:
         return
     repeat = (g >= 2).mean() * 100
+    evidence = _ev(
+        [cust, oid],
+        f"Counted distinct {oid} values for each {cust}. A repeat customer has 2 or more.",
+        len(g),
+        [
+            {"label": "Customers", "value": f"{len(g)}"},
+            {"label": "Bought more than once", "value": f"{int((g >= 2).sum())} ({repeat:.0f}%)"},
+            {"label": "Bought once", "value": f"{int((g < 2).sum())}"},
+        ],
+        _conf(len(g) * 5),
+    )
     if repeat < 30:
         out.append(_ins(
             "risk" if repeat < 20 else "info", "Most customers buy only once",
             f"{repeat:.0f}% of {len(g)} customers ordered more than once.",
             "A follow-up message or small offer after the first order can bring them back. Repeat buyers cost less to win.",
+            evidence,
         ))
     else:
         out.append(_ins(
             "opportunity", "You have a repeat customer base",
             f"{repeat:.0f}% of {len(g)} customers ordered more than once.",
             "Reward them and ask for referrals. This is your cheapest source of growth.",
+            evidence,
         ))
 
 
@@ -635,9 +747,10 @@ def _ins_weekday(df, ctx, out):
     m, agg = ctx["measure"], ctx["agg"]
     if not m or not ctx["dates"]:
         return
-    _, parsed = next(iter(ctx["dates"].items()))
+    date_col, parsed = next(iter(ctx["dates"].items()))
     f = pd.DataFrame({"d": parsed, "v": _clean_numeric(df[m])}).dropna()
-    if len(f) < 20 or (f["d"].max() - f["d"].min()).days < 28:
+    span = (f["d"].max() - f["d"].min()).days if len(f) else 0
+    if len(f) < 20 or span < 28:
         return
     daily = f.groupby(f["d"].dt.normalize())["v"].agg("sum" if agg == "sum" else "mean")
     by_day = daily.groupby(daily.index.day_name()).mean()
@@ -646,10 +759,15 @@ def _ins_weekday(df, ctx, out):
     best, worst = by_day.idxmax(), by_day.idxmin()
     lift = (by_day.max() / by_day.mean() - 1) * 100
     if lift >= 15:
+        order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        table = [{"label": d, "value": _fmt(by_day[d])} for d in order if d in by_day.index]
         out.append(_ins(
             "opportunity", "Your busiest day",
             f"{best} is {lift:.0f}% above an average day for {m}. {worst} is the slowest.",
             f"Plan stock, staff and promotions around {best}. Try a small offer on {worst}.",
+            _ev([m, date_col],
+                f"Totalled {m} for each calendar day, then averaged those daily totals for each weekday.",
+                len(f), table, _conf(len(f), span)),
         ))
 
 
@@ -668,6 +786,10 @@ def _ins_discount(df, ctx, out):
         return
     avg = d[d > 0].mean()
     msg = f"{share:.0f}% of records carry a discount (average {avg:.0f}%)."
+    table = [
+        {"label": "Records with a discount", "value": f"{share:.0f}%"},
+        {"label": "Average discount when given", "value": f"{avg:.1f}%"},
+    ]
 
     ret = ctx["roles"]["returned"]
     if ret:
@@ -675,17 +797,21 @@ def _ins_discount(df, ctx, out):
         a, b = flag[given & d.notna()].dropna(), flag[~given & d.notna()].dropna()
         if len(a) >= MIN_GROUP_RECORDS and len(b) >= MIN_GROUP_RECORDS:
             msg += f" Return rate: {a.mean() * 100:.1f}% with a discount vs {b.mean() * 100:.1f}% without."
+            table.append({"label": "Return rate with discount", "value": f"{a.mean() * 100:.1f}% of {len(a)}"})
+            table.append({"label": "Return rate without discount", "value": f"{b.mean() * 100:.1f}% of {len(b)}"})
+
     out.append(_ins(
         "info", "How discounts are used", msg,
         "Compare a discount period with a normal one. Make sure discounts bring extra sales and not just a lower price on sales you would have made anyway.",
+        _ev([disc] + ([ret] if ret else []),
+            f"A record counts as discounted when {disc} is above 0.",
+            int(d.notna().sum()), table,
+            note="This compares groups. It does not prove the discount caused the difference."),
     ))
 
 
 def _ins_relationship(df, ctx, out):
-    cols = [
-        c for c in ctx["metrics"]
-        if _clean_numeric(df[c]).nunique() > 5
-    ][:8]
+    cols = [c for c in ctx["metrics"] if _clean_numeric(df[c]).nunique() > 5][:8]
     if len(cols) < 2:
         return
     corr = df[cols].apply(_clean_numeric).corr()
@@ -698,12 +824,17 @@ def _ins_relationship(df, ctx, out):
     if not best or abs(best[2]) < 0.5:
         return
     a, b, v = best
+    pairs = int(df[[a, b]].apply(_clean_numeric).dropna().shape[0])
     direction = "rise together" if v > 0 else "move in opposite directions"
     note = " This may simply be because one is calculated from the other." if abs(v) > 0.9 else ""
     out.append(_ins(
         "info", "Two columns move together",
         f"{a} and {b} {direction} (correlation {v:+.2f}).{note}",
         "A link does not prove one causes the other. Use it as a lead to test.",
+        _ev([a, b], "Pearson correlation between the two columns (from -1 to +1).", pairs,
+            [{"label": "Correlation", "value": f"{v:+.2f}"},
+             {"label": "Rows compared", "value": f"{pairs}"}],
+            note="Correlation shows two columns move together, not that one causes the other."),
     ))
 
 
@@ -717,6 +848,8 @@ def _ins_generic(df, ctx, out):
                 "info", f"One {dim} dominates",
                 f"{vc.index[0]} makes up {vc.iloc[0] * 100:.0f}% of records in {dim}.",
                 "Make sure this matches what you expect, and that smaller groups are not being overlooked.",
+                _ev([dim], f"Share of records for each {dim} value.", int(df[dim].notna().sum()),
+                    [{"label": str(k), "value": f"{v * 100:.0f}%"} for k, v in vc.head(6).items()]),
             ))
     for col in ctx["metrics"][:2]:
         v = _clean_numeric(df[col]).dropna()
@@ -730,6 +863,11 @@ def _ins_generic(df, ctx, out):
                 "info", f"Unusually high {col}",
                 f"{n} record{'s' if n != 1 else ''} {'have' if n != 1 else 'has'} a {col} far above normal (over {_fmt(limit)}).",
                 "Check whether these are data errors or genuine big cases worth a closer look.",
+                _ev([col], "A value is 'unusually high' when it is above the 75th percentile plus 1.5 times the middle spread (IQR rule).",
+                    len(v),
+                    [{"label": "Normal upper limit", "value": _fmt(limit)},
+                     {"label": "Records above it", "value": f"{n}"},
+                     {"label": "Highest value", "value": _fmt(v.max())}]),
             ))
 
 
@@ -742,12 +880,15 @@ def _ins_data_notes(df, ctx, out):
                 "info", "Missing values may affect results",
                 f"{miss:.0f}% of {m} values are empty, so totals may be lower than reality.",
                 "Fill or fix these in the Data Cleaning step for more accurate charts.",
+                _ev([m], f"Share of rows where {m} is empty.", len(df),
+                    [{"label": "Empty values", "value": f"{int(df[m].isna().sum())} of {len(df)}"}]),
             ))
     if len(df) < 50:
         out.append(_ins(
             "info", "Small dataset",
             f"This file has only {len(df)} rows, so patterns can change quickly with new data.",
             "Use these insights as early hints and re-check once you have more records.",
+            _ev([], "Row count of the uploaded file.", len(df), confidence="low"),
         ))
 
 
@@ -786,7 +927,13 @@ def _business_insights(df, ctx, limit=8):
 # main entry
 # --------------------------------------------------------------------------
 
-def build_dashboard_data(df):
+OVERRIDE_KEYS = {
+    "revenue", "quantity", "order_id", "product",
+    "returned", "discount", "customer", "date",
+}
+
+
+def build_dashboard_data(df, role_overrides=None):
     base = build_visualization_data(df)           # summary, kpis, columns
     if df.empty or len(df.columns) == 0:
         base["insights"] = []
@@ -799,6 +946,33 @@ def build_dashboard_data(df):
     dates = detected["dates"]
     identifiers = set(detected["identifiers"])
     categorical = detected["categorical"]
+
+    customer_name = next(
+        (c for c in columns
+         if _name(c) in {"customer", "customer_name", "client", "client_name"}),
+        None,
+    )
+
+    # ---- column choices made by the user (Confirm columns panel) --------
+    overrides = {
+        k: v for k, v in (role_overrides or {}).items()
+        if k in OVERRIDE_KEYS
+    }
+
+    def _valid(column):
+        return column if column in df.columns else None
+
+    for key in ("revenue", "quantity", "order_id", "product", "returned", "discount"):
+        if key in overrides:
+            roles[key] = _valid(overrides[key])
+
+    if "customer" in overrides:
+        customer_name = _valid(overrides["customer"])
+        roles["customer_id"] = customer_name
+
+    if "date" in overrides:
+        chosen = _valid(overrides["date"])
+        dates = {chosen: _parse_dates(df[chosen])} if chosen else {}
 
     def uniq(c):
         return df[c].nunique(dropna=True)
@@ -827,12 +1001,6 @@ def build_dashboard_data(df):
              if c not in skip_as_measure and c != measure), None
         )
     sec_agg = "sum" if secondary == roles["quantity"] else "mean"
-
-    customer_name = next(
-        (c for c in columns
-         if _name(c) in {"customer", "customer_name", "client", "client_name"}),
-        None,
-    )
 
     cat_cols = [
         c for c in categorical
@@ -961,4 +1129,17 @@ def build_dashboard_data(df):
         "metrics": metrics,
     }
     base["insights"] = _business_insights(df, ctx) or _build_insights(charts)
+
+    base["kpis"] = _build_kpis(df, detected, roles)
+    base["detected_roles"] = {
+        "revenue": roles["revenue"],
+        "quantity": roles["quantity"],
+        "order_id": roles["order_id"],
+        "customer": customer_name or roles["customer_id"],
+        "product": roles["product"],
+        "returned": roles["returned"],
+        "discount": roles["discount"],
+        "date": next(iter(dates), None),
+    }
+    base["ignored_id_columns"] = [str(c) for c in identifiers]
     return base

@@ -1,4 +1,3 @@
-
 import json
 from io import BytesIO
 from uuid import uuid4
@@ -14,9 +13,17 @@ from app.profiling import profile_dataframe
 from app.quality import check_data_quality
 from app.cleaning import clean_dataframe
 from app.ai_service import ask_groq, generate_dashboard_insights
-from app.data_analysis import build_dataset_context
+from app.data_analysis import (
+    build_dataset_context,
+    run_query,
+    explain_change,
+)
+from app.trust import build_cleaning_report
 from app.dashboard_builder import build_dashboard_data
-from app.visualization import (build_visualization_data, build_custom_chart)
+from app.visualization import (
+    build_visualization_data,
+    build_custom_chart,
+)
 
 
 # --------------------------------------------------
@@ -25,7 +32,7 @@ from app.visualization import (build_visualization_data, build_custom_chart)
 
 class QuestionRequest(BaseModel):
     question: str
-    version: str = "original"
+    version: str = "cleaned"
     history: List[Dict[str, str]] = Field(default_factory=list)
 
 
@@ -45,7 +52,7 @@ class CustomChartRequest(BaseModel):
 app = FastAPI(
     title="DataLens API",
     description="AI-powered Data Quality and Analytics Copilot",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 
@@ -64,7 +71,7 @@ app.add_middleware(
 
 
 # --------------------------------------------------
-# 3. Configuration and temporary storage
+# 3. Configuration, temporary storage and caches
 # --------------------------------------------------
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -75,14 +82,63 @@ datasets = {}
 # Store cleaned versions separately
 cleaned_datasets = {}
 
+# Cleaning reconciliation reports (what changed, before/after totals)
+cleaning_reports = {}
+
+# Caches so repeated questions and page loads are fast
+context_cache = {}     # (dataset_id, "original"|"cleaned") -> AI summary JSON
+dashboard_cache = {}   # (dataset_id, using_cleaned, roles_json) -> dashboard
+
+
+def invalidate_caches(dataset_id: str):
+    """Forget cached results for a dataset (call after its data changes)."""
+    for cache in (context_cache, dashboard_cache):
+        for key in [k for k in cache if k[0] == dataset_id]:
+            del cache[key]
 
 
 def get_df(dataset_id: str, version: str = "cleaned"):
+    """
+    Return (dataframe, using_cleaned).
+    'cleaned' quietly falls back to the uploaded data if cleaning has
+    not been applied yet.
+    """
     if dataset_id not in datasets:
-        raise HTTPException(status_code=404, detail="Dataset not found.")
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again.",
+        )
+
+    if version not in ("original", "cleaned"):
+        raise HTTPException(
+            status_code=400,
+            detail="Version must be 'original' or 'cleaned'.",
+        )
+
     if version == "cleaned" and dataset_id in cleaned_datasets:
         return cleaned_datasets[dataset_id], True
+
     return datasets[dataset_id], False
+
+
+def parse_roles(raw: Optional[str]) -> Dict[str, Optional[str]]:
+    """Parse the column choices sent by the Confirm columns panel."""
+    if not raw:
+        return {}
+
+    try:
+        value = json.loads(raw)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid roles value.")
+
+    if not isinstance(value, dict):
+        raise HTTPException(status_code=400, detail="Roles must be an object.")
+
+    return {
+        str(key): (str(item) if item else None)
+        for key, item in value.items()
+    }
+
 
 # --------------------------------------------------
 # 4. Home and health-check endpoints
@@ -295,6 +351,18 @@ def apply_cleaning(
     # Save cleaned version separately
     cleaned_datasets[dataset_id] = cleaned_df.copy(deep=True)
 
+    # Keep a verifiable record of what cleaning did
+    try:
+        cleaning_reports[dataset_id] = build_cleaning_report(
+            original_df, cleaned_df, changes, operations
+        )
+    except Exception as error:
+        print(f"Cleaning report error: {error}")
+        cleaning_reports.pop(dataset_id, None)
+
+    # Cleaned data changed, so old summaries and dashboards are stale
+    invalidate_caches(dataset_id)
+
     return {
         "dataset_id": dataset_id,
         "status": "success",
@@ -425,8 +493,31 @@ def download_cleaned_csv(
 
 
 # --------------------------------------------------
-# 10. Ask questions about dataset
+# 10. Cleaning report (what changed, before/after checks)
 # --------------------------------------------------
+
+@app.get("/api/v1/datasets/{dataset_id}/clean/report")
+def get_cleaning_report(dataset_id: str):
+
+    if dataset_id not in datasets:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again.",
+        )
+
+    report = cleaning_reports.get(dataset_id)
+
+    if report is None:
+        return {"available": False}
+
+    return {"available": True, **report}
+
+
+# --------------------------------------------------
+# 11. Ask questions about dataset
+# --------------------------------------------------
+# Plain `def` (not async) so FastAPI runs the pandas work and the AI call
+# in a worker thread and other requests are not blocked.
 
 @app.post("/api/v1/datasets/{dataset_id}/ask")
 def ask_dataset_question(
@@ -434,50 +525,47 @@ def ask_dataset_question(
     request: QuestionRequest,
 ):
 
-    if dataset_id not in datasets:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found.",
-        )
+    question = request.question.strip()
 
-    if request.version == "original":
-        df = datasets[dataset_id]
-
-    elif request.version == "cleaned":
-        if dataset_id not in cleaned_datasets:
-            raise HTTPException(
-                status_code=404,
-                detail="Cleaned dataset not available.",
-            )
-
-        df = cleaned_datasets[dataset_id]
-
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Version must be original or cleaned.",
-        )
-
-    if not request.question.strip():
+    if not question:
         raise HTTPException(
             status_code=400,
             detail="Question cannot be empty.",
         )
 
-    try:
-        context = build_dataset_context(df)
+    df, using_cleaned = get_df(dataset_id, request.version)
+    used_version = "cleaned" if using_cleaned else "original"
 
-        answer = ask_groq(
-            question=request.question,
+    # The dataset summary is built once, then reused for every question
+    cache_key = (dataset_id, used_version)
+    context = context_cache.get(cache_key)
+
+    if context is None:
+        context = build_dataset_context(df)
+        context_cache[cache_key] = context
+
+    def run_tool(name, arguments):
+        if name == "run_query":
+            return run_query(df, arguments)
+        if name == "explain_change":
+            return explain_change(df, arguments)
+        return {"error": f"Unknown tool '{name}'."}
+
+    try:
+        result = ask_groq(
+            question=question,
             context=context,
             history=request.history,
+            tool_runner=run_tool,
         )
 
         return {
             "dataset_id": dataset_id,
-            "version": request.version,
-            "question": request.question,
-            "answer": answer,
+            "version": used_version,
+            "requested_version": request.version,
+            "question": question,
+            "answer": result["answer"],
+            "calculations": result["calculations"],
             "status": "success",
         }
 
@@ -489,45 +577,23 @@ def ask_dataset_question(
 
 
 # --------------------------------------------------
-# 11. Dataset visualization endpoint
+# 12. Dataset visualization endpoint
 # --------------------------------------------------
 
 @app.get("/api/v1/datasets/{dataset_id}/charts")
 def get_dataset_charts(
     dataset_id: str,
-    version: str = "original",
+    version: str = "cleaned",
 ):
 
-    if dataset_id not in datasets:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found. Please upload the CSV again.",
-        )
-
-    if version == "original":
-        df = datasets[dataset_id]
-
-    elif version == "cleaned":
-        if dataset_id not in cleaned_datasets:
-            raise HTTPException(
-                status_code=404,
-                detail="Cleaned dataset not available. Apply cleaning first.",
-            )
-
-        df = cleaned_datasets[dataset_id]
-
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail="Version must be original or cleaned.",
-        )
+    df, using_cleaned = get_df(dataset_id, version)
 
     try:
         result = build_visualization_data(df)
 
         return {
             "dataset_id": dataset_id,
-            "version": version,
+            "version": "cleaned" if using_cleaned else "original",
             **result,
         }
 
@@ -539,18 +605,33 @@ def get_dataset_charts(
 
 
 # --------------------------------------------------
-# 12. AI Dashboard endpoint
+# 13. AI Dashboard endpoint
 # --------------------------------------------------
+# roles    JSON of column choices from the "Confirm columns" panel
+# refresh  true = ignore the cache and rebuild
 
 @app.get("/api/v1/datasets/{dataset_id}/dashboard")
-async def get_ai_dashboard(
+def get_ai_dashboard(
     dataset_id: str,
     version: str = "cleaned",
+    roles: Optional[str] = None,
+    refresh: bool = False,
 ):
+
     df, using_cleaned = get_df(dataset_id, version)
+    role_overrides = parse_roles(roles)
+
+    cache_key = (
+        dataset_id,
+        using_cleaned,
+        json.dumps(role_overrides, sort_keys=True),
+    )
+
+    if not refresh and cache_key in dashboard_cache:
+        return dashboard_cache[cache_key]
 
     try:
-        visualization = build_dashboard_data(df)
+        visualization = build_dashboard_data(df, role_overrides)
 
         try:
             dashboard_ai = generate_dashboard_insights(
@@ -559,14 +640,18 @@ async def get_ai_dashboard(
                 version="cleaned" if using_cleaned else "original",
             )
         except Exception:
-            dashboard_ai = None  # AI fail ho to bhi dashboard chale
+            dashboard_ai = None  # dashboard still works without AI
 
-        return {
+        payload = {
             "dataset_id": dataset_id,
+            "version": "cleaned" if using_cleaned else "original",
             "using_cleaned": using_cleaned,
             **visualization,
             "dashboard_ai": dashboard_ai,
         }
+
+        dashboard_cache[cache_key] = payload
+        return payload
 
     except Exception as error:
         raise HTTPException(
@@ -574,8 +659,9 @@ async def get_ai_dashboard(
             detail=f"Unable to generate AI dashboard: {str(error)}",
         )
 
+
 # --------------------------------------------------
-# 13. Custom interactive chart endpoint
+# 14. Custom interactive chart endpoint
 # --------------------------------------------------
 
 @app.post("/api/v1/datasets/{dataset_id}/charts/custom")
@@ -587,7 +673,6 @@ def create_custom_chart(
 
     df, _ = get_df(dataset_id, version)
 
-    # Generate custom chart
     try:
         chart = build_custom_chart(
             df=df,

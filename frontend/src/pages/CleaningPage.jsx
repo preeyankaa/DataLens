@@ -1,6 +1,6 @@
-
 import { useOutletContext } from "react-router-dom";
 import CleaningSection from "../components/CleaningSection";
+import CleaningReport from "../components/CleaningReport";
 
 function CleaningPage() {
   const dataset = useOutletContext();
@@ -11,6 +11,8 @@ function CleaningPage() {
         datasetId={dataset.dataset_id}
         profile={dataset.profile}
       />
+
+      <CleaningReport datasetId={dataset.dataset_id} />
     </div>
   );
 }
