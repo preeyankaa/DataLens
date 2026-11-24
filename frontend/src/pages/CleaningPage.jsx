@@ -10,6 +10,7 @@ function CleaningPage() {
       <CleaningSection
         datasetId={dataset.dataset_id}
         profile={dataset.profile}
+        qualityReport={dataset.quality_report}
       />
 
       <CleaningReport datasetId={dataset.dataset_id} />

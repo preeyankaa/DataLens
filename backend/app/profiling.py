@@ -1,7 +1,8 @@
-
 import json
 
 import pandas as pd
+
+from app.data_analysis import column_kind
 
 
 def profile_dataframe(df: pd.DataFrame) -> dict:
@@ -35,6 +36,9 @@ def profile_dataframe(df: pd.DataFrame) -> dict:
 
         column_profiles[str(column)] = {
             "data_type": str(series.dtype),
+            # What the column really holds (numeric, categorical, date, id,
+            # text, boolean), worked out from its content and not only its name.
+            "inferred_type": column_kind(column, series),
             "missing_count": missing_count,
             "missing_percentage": (
                 round((missing_count / row_count) * 100, 2)

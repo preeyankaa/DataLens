@@ -126,6 +126,11 @@ def _column_kind(name, series):
     return "categorical"
 
 
+def column_kind(name, series):
+    """Public helper: numeric, categorical, date, id, text or boolean."""
+    return _column_kind(name, series)
+
+
 # --------------------------------------------------
 # dataset card (cached by main.py)
 # --------------------------------------------------

@@ -1,0 +1,29 @@
+/* Small additions for WorkspaceLayout (keeps Workspace.css untouched) */
+
+a.workspace-brand {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.workspace-brand:hover {
+  opacity: 0.85;
+}
+
+.workspace-load-notes {
+  margin-top: 6px;
+  color: #77748a;
+  font-size: 12px;
+}
+
+.workspace-load-notes summary {
+  cursor: pointer;
+  color: #6366f1;
+  font-weight: 600;
+}
+
+.workspace-load-notes ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.6;
+}

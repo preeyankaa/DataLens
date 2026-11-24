@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Link } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import {
   LayoutDashboard,
   Broom,
@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import "./Workspace.css";
+import "./WorkspaceExtras.css";
 
 function WorkspaceLayout({ dataset }) {
   const navigation = [
@@ -34,13 +35,15 @@ function WorkspaceLayout({ dataset }) {
     },
   ];
 
+  const loadNotes = dataset.load_info?.notes || [];
+
   return (
     <div className="workspace">
       <aside className="workspace-sidebar">
-      <Link to="/" className="workspace-brand" title="Back to home">
-        <Database size={25} />
-        <h2>DataLens</h2>
-      </Link>
+        <Link to="/" className="workspace-brand" title="Back to home">
+          <Database size={25} />
+          <h2>DataLens</h2>
+        </Link>
 
         <div className="sidebar-section">
           <p className="sidebar-label">WORKSPACE</p>
@@ -77,11 +80,23 @@ function WorkspaceLayout({ dataset }) {
           <div>
             <span className="header-label">CURRENT DATASET</span>
             <h3>{dataset.filename}</h3>
+
+            {loadNotes.length > 0 && (
+              <details className="workspace-load-notes">
+                <summary>
+                  {loadNotes.length} note{loadNotes.length > 1 ? "s" : ""} about
+                  how this file was read
+                </summary>
+                <ul>
+                  {loadNotes.map((note, index) => (
+                    <li key={index}>{note}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
           </div>
 
-          <span className="dataset-status">
-            Analysis complete
-          </span>
+          <span className="dataset-status">Analysis complete</span>
         </header>
 
         <div className="workspace-content">

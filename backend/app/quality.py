@@ -1,16 +1,85 @@
-
 import math
+import re
 
 import pandas as pd
 
 
 DATE_KEYWORDS = ("date", "time", "timestamp", "dob", "birth")
 
+MAX_TEXT_UNIQUE = 300          # skip free-text style columns
+MAX_VARIANT_EXAMPLES = 3
+
 
 def _safe_number(value):
     """Convert a number to JSON-safe output."""
     number = float(value)
     return number if math.isfinite(number) else None
+
+
+def _inconsistent_text(series):
+    """
+    Find values that are the same thing written differently
+    ("Paid Search", "paid search", "PAID SEARCH ").
+    Returns (affected_cells, groups, row_mask). row_mask is True where the
+    cell is not written in the most common spelling.
+    """
+    empty = pd.Series(False, index=series.index)
+    values = series.dropna().astype(str)
+    if values.empty:
+        return 0, [], empty
+
+    counts = values.value_counts()
+    if len(counts) > MAX_TEXT_UNIQUE or len(counts) / len(values) > 0.5:
+        return 0, [], empty
+
+    key = (
+        counts.index.to_series()
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+        .str.lower()
+    )
+
+    groups = []
+    canonical = {}
+
+    for _, spellings in counts.groupby(key.to_numpy()):
+        if len(spellings) < 2:
+            continue
+        ordered = spellings.sort_values(ascending=False)
+        for spelling in ordered.index:
+            canonical[spelling] = ordered.index[0]
+        groups.append(
+            [repr(v) if v != v.strip() else v for v in ordered.index[:4]]
+        )
+
+    if not canonical:
+        return 0, [], empty
+
+    as_text = series.astype("string")
+    mask = as_text.map(canonical).notna() & (
+        as_text.map(canonical) != as_text
+    )
+    mask = mask.fillna(False).astype(bool)
+
+    groups.sort(key=len, reverse=True)
+    return int(mask.sum()), groups[:MAX_VARIANT_EXAMPLES], mask
+
+
+def _date_style_votes(series):
+    """Count unambiguous day-first and month-first slash dates."""
+    day_first = month_first = 0
+
+    for value in series.dropna().astype(str).head(5000):
+        match = re.match(r"^\s*(\d{1,2})/(\d{1,2})/(\d{2,4})", value)
+        if not match:
+            continue
+        first, second = int(match.group(1)), int(match.group(2))
+        if first > 12 and second <= 12:
+            day_first += 1
+        elif second > 12 and first <= 12:
+            month_first += 1
+
+    return day_first, month_first
 
 
 def check_data_quality(
@@ -81,7 +150,7 @@ def check_data_quality(
             "row_indices": [
                 int(index)
                 for index in df.index[duplicate_mask][:100]
-                if isinstance(index, int)
+                if isinstance(index, (int, pd.api.types.pandas_dtype("int64").type))
             ],
             "message": f"{duplicate_count} duplicate rows detected.",
             "recommendation": (
@@ -117,10 +186,47 @@ def check_data_quality(
                 ),
             })
 
-    # 4. IQR-based outlier detection
+    # 4. Same value written in different ways (case / extra spaces)
+    inconsistent_cell_count = 0
+    inconsistent_rows = pd.Series(False, index=df.index)
+
+    for column in df.columns:
+        series = df[column]
+
+        if pd.api.types.is_numeric_dtype(series) or pd.api.types.is_datetime64_any_dtype(series):
+            continue
+
+        affected, groups, text_mask = _inconsistent_text(series)
+
+        if affected == 0:
+            continue
+
+        inconsistent_cell_count += affected
+        inconsistent_rows |= text_mask
+        column_quality[str(column)]["inconsistent_values"] = affected
+
+        issues.append({
+            "type": "inconsistent_text",
+            "column": str(column),
+            "severity": "medium",
+            "count": affected,
+            "percentage": round(affected / row_count * 100, 2) if row_count else 0.0,
+            "examples": groups,
+            "message": (
+                f"'{column}' has the same value written in different ways "
+                f"({affected} cells differ in capital letters or spaces)."
+            ),
+            "recommendation": (
+                "Merge the spellings so each value appears one way. Otherwise "
+                "charts and totals will split one group into several."
+            ),
+        })
+
+    # 5. IQR-based outlier detection
     numeric_df = df.select_dtypes(include="number")
 
     outlier_cell_count = 0
+    outlier_rows = pd.Series(False, index=df.index)
 
     for column in numeric_df.columns:
         series = numeric_df[column].dropna()
@@ -145,6 +251,7 @@ def check_data_quality(
 
         count = int(outlier_mask.sum())
         outlier_cell_count += count
+        outlier_rows |= outlier_mask
 
         if count > 0:
             issues.append({
@@ -165,7 +272,7 @@ def check_data_quality(
                 ),
             })
 
-    # 5. Negative values in user-designated non-negative columns
+    # 6. Negative values in user-designated non-negative columns
     for column in non_negative_columns:
         if column not in df.columns:
             continue
@@ -193,7 +300,7 @@ def check_data_quality(
                 ),
             })
 
-    # 6. Potentially invalid dates in date-like column names
+    # 7. Dates: values that cannot be read, and mixed date styles
     for column in df.columns:
         name = str(column).lower()
 
@@ -207,6 +314,27 @@ def check_data_quality(
 
         if non_missing.empty:
             continue
+
+        day_first, month_first = _date_style_votes(non_missing)
+
+        if day_first and month_first:
+            issues.append({
+                "type": "mixed_date_formats",
+                "column": str(column),
+                "severity": "medium",
+                "count": day_first + month_first,
+                "percentage": round(
+                    min(day_first, month_first) / len(non_missing) * 100, 2
+                ),
+                "message": (
+                    f"'{column}' mixes two date styles: {month_first} dates are "
+                    f"clearly MM/DD/YYYY and {day_first} are clearly DD/MM/YYYY."
+                ),
+                "recommendation": (
+                    "Convert all dates to one format (YYYY-MM-DD) and check any "
+                    "ambiguous dates such as 04/05/2025."
+                ),
+            })
 
         parsed = pd.to_datetime(
             non_missing,
@@ -236,24 +364,18 @@ def check_data_quality(
                 ),
             })
 
-    # 7. Explainable quality score
+    # 8. Explainable quality score
+    # Based on the share of ROWS affected, so it reacts clearly to real problems.
     missing_cells = int(df.isna().sum().sum())
 
-    missing_rate = (
-        missing_cells / total_cells if total_cells else 0.0
-    )
-    duplicate_rate = (
-        duplicate_count / row_count if row_count else 0.0
-    )
-    outlier_rate = (
-        outlier_cell_count / total_cells if total_cells else 0.0
-    )
+    def share(count):
+        return count / row_count if row_count else 0.0
 
-    # This is a heuristic score, not a universal quality standard.
     penalties = {
-        "missing": 40 * missing_rate,
-        "duplicates": 20 * duplicate_rate,
-        "outliers": 20 * outlier_rate,
+        "missing": 35 * share(int(df.isna().any(axis=1).sum())),
+        "duplicates": 20 * share(duplicate_count),
+        "outliers": 15 * share(int(outlier_rows.sum())),
+        "inconsistent_text": 30 * share(int(inconsistent_rows.sum())),
     }
 
     quality_score = round(
@@ -264,15 +386,19 @@ def check_data_quality(
     return {
         "quality_score": quality_score,
         "score_explanation": {
-            "method": "100 minus weighted missing, duplicate and outlier rates",
+            "method": (
+                "100 minus points for the share of rows that have a missing "
+                "value, are duplicates, hold an outlier, or use inconsistent spelling"
+            ),
             "penalties": {
                 key: round(value, 2)
                 for key, value in penalties.items()
             },
             "weights": {
-                "missing": 40,
+                "missing": 35,
                 "duplicates": 20,
-                "outliers": 20,
+                "outliers": 15,
+                "inconsistent_text": 30,
             },
             "note": (
                 "This preliminary heuristic does not include all issue types "
@@ -286,6 +412,7 @@ def check_data_quality(
             "missing_cells": missing_cells,
             "duplicate_rows": duplicate_count,
             "outlier_cells": outlier_cell_count,
+            "inconsistent_cells": inconsistent_cell_count,
         },
         "column_quality": column_quality,
         "issues": issues,

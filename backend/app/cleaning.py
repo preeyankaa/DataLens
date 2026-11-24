@@ -1,4 +1,3 @@
-
 import re
 import numpy as np
 import pandas as pd
@@ -169,6 +168,41 @@ def _standardize_text(value):
     return COUNTRY_ALIASES.get(alias_key, value)
 
 
+def _merge_case_variants(series):
+    """
+    Make the same value look the same ("paid search", "Paid Search ",
+    "PAID SEARCH" -> the most common spelling). Returns (new_series, info).
+    """
+    text = series.astype("string")
+    tidy = text.str.replace(r"\s+", " ", regex=True).str.strip()
+    key = tidy.str.lower()
+
+    frame = pd.DataFrame({"k": key, "v": tidy}).dropna()
+
+    if frame.empty:
+        return series, {"values_merged": 0, "groups_merged": 0}
+
+    counts = (
+        frame.groupby(["k", "v"]).size().reset_index(name="n")
+        .sort_values(["k", "n", "v"], ascending=[True, False, True])
+    )
+
+    canonical = counts.drop_duplicates("k").set_index("k")["v"]
+    variants = counts.groupby("k")["v"].nunique()
+
+    merged = key.map(canonical).astype(object)
+    merged = merged.where(text.notna(), np.nan)
+
+    changed = int(
+        (text.fillna("").astype(str) != merged.fillna("").astype(str)).sum()
+    )
+
+    return merged, {
+        "values_merged": changed,
+        "groups_merged": int((variants > 1).sum()),
+    }
+
+
 def _get_strategy(config):
     if isinstance(config, dict):
         return config.get("strategy", "auto"), config.get("value")
@@ -286,6 +320,8 @@ def _fill_missing_values(df, column, config):
 # --------------------------------------------------
 # MAIN CLEANING FUNCTION
 # --------------------------------------------------
+# Order matters. Text and dates are made consistent FIRST, so rows that
+# only differed by spelling or date style are recognised as duplicates.
 
 def clean_dataframe(df, operations):
     cleaned_df = df.copy()
@@ -293,52 +329,8 @@ def clean_dataframe(df, operations):
 
     operations = operations or {}
 
-    # 1. REMOVE DUPLICATES
-    if operations.get("remove_duplicates", False):
-        before = len(cleaned_df)
-
-        cleaned_df.drop_duplicates(inplace=True)
-
-        changes["duplicates_removed"] = before - len(cleaned_df)
-
-    # 2. MISSING VALUES
-    missing_config = operations.get("missing_values", {})
-
-    if isinstance(missing_config, dict):
-        for column, config in missing_config.items():
-            if column not in cleaned_df.columns:
-                continue
-
-            result = _fill_missing_values(
-                cleaned_df,
-                column,
-                config
-            )
-
-            if result is not None:
-                changes[f"missing_{column}"] = result
-
-    # 3. DATE STANDARDIZATION
-    date_columns = operations.get("date_columns", [])
-
-    for column in date_columns:
-        if column not in cleaned_df.columns:
-            continue
-
-        parsed = _parse_dates(cleaned_df[column])
-
-        cleaned_df[column] = parsed.dt.strftime("%Y-%m-%d")
-
-        changes[f"date_{column}"] = {
-            "converted": int(parsed.notna().sum()),
-            "invalid_or_missing": int(parsed.isna().sum()),
-            "format": "YYYY-MM-DD"
-        }
-
-    # 4. TEXT STANDARDIZATION
-    standardize_columns = operations.get("standardize_columns", [])
-
-    for column in standardize_columns:
+    # 1. TEXT TIDY-UP (spaces, aliases)
+    for column in operations.get("standardize_columns", []) or []:
         if column not in cleaned_df.columns:
             continue
 
@@ -357,8 +349,21 @@ def clean_dataframe(df, operations):
             "values_normalized": normalized_count
         }
 
-    # 5. CUSTOM VALUE STANDARDIZATION
-    standardize_values = operations.get("standardize_values", {})
+    # 2. SAME VALUE, DIFFERENT SPELLING (case and spaces)
+    for column in operations.get("merge_case_columns", []) or []:
+        if column not in cleaned_df.columns:
+            continue
+
+        if pd.api.types.is_numeric_dtype(cleaned_df[column]):
+            continue
+
+        merged, info = _merge_case_variants(cleaned_df[column])
+        cleaned_df[column] = merged
+
+        changes[f"merge_case_{column}"] = info
+
+    # 3. CUSTOM VALUE STANDARDIZATION
+    standardize_values = operations.get("standardize_values", {}) or {}
 
     for column, mappings in standardize_values.items():
         if column not in cleaned_df.columns:
@@ -373,8 +378,23 @@ def clean_dataframe(df, operations):
             "mappings_applied": len(mappings)
         }
 
-    # 6. TYPE CONVERSIONS
-    type_conversions = operations.get("type_conversions", {})
+    # 4. DATE STANDARDIZATION
+    for column in operations.get("date_columns", []) or []:
+        if column not in cleaned_df.columns:
+            continue
+
+        parsed = _parse_dates(cleaned_df[column])
+
+        cleaned_df[column] = parsed.dt.strftime("%Y-%m-%d")
+
+        changes[f"date_{column}"] = {
+            "converted": int(parsed.notna().sum()),
+            "invalid_or_missing": int(parsed.isna().sum()),
+            "format": "YYYY-MM-DD"
+        }
+
+    # 5. TYPE CONVERSIONS
+    type_conversions = operations.get("type_conversions", {}) or {}
 
     for column, target_type in type_conversions.items():
         if column not in cleaned_df.columns:
@@ -409,11 +429,47 @@ def clean_dataframe(df, operations):
                 "reason": str(error)
             }
 
-    # 7. OUTLIER CLIPPING
-    # Only runs for columns explicitly selected by the user.
-    outlier_columns = operations.get("outlier_columns", [])
+    # 6. REMOVE DUPLICATES
+    remove_duplicates = operations.get("remove_duplicates", False)
 
-    for column in outlier_columns:
+    if remove_duplicates:
+        before = len(cleaned_df)
+
+        cleaned_df.drop_duplicates(inplace=True)
+
+        changes["duplicates_removed"] = before - len(cleaned_df)
+
+    # 7. MISSING VALUES
+    missing_config = operations.get("missing_values", {})
+
+    if isinstance(missing_config, dict):
+        for column, config in missing_config.items():
+            if column not in cleaned_df.columns:
+                continue
+
+            result = _fill_missing_values(
+                cleaned_df,
+                column,
+                config
+            )
+
+            if result is not None:
+                changes[f"missing_{column}"] = result
+
+    # 7b. Filling empty cells can make two rows identical (for example an
+    #     empty discount filled with 0). Remove those copies too.
+    if remove_duplicates:
+        before = len(cleaned_df)
+
+        cleaned_df.drop_duplicates(inplace=True)
+
+        changes["duplicates_removed"] = (
+            changes.get("duplicates_removed", 0) + before - len(cleaned_df)
+        )
+
+    # 8. OUTLIER CLIPPING
+    # Only runs for columns explicitly selected by the user.
+    for column in operations.get("outlier_columns", []) or []:
         if column not in cleaned_df.columns:
             continue
 

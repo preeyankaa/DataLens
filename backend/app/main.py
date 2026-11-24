@@ -1,17 +1,20 @@
 import json
 from io import BytesIO
+from pathlib import Path
 from uuid import uuid4
 from typing import Optional, List, Dict, Any
 
 import pandas as pd
 from pydantic import BaseModel, Field
 from fastapi import FastAPI, File, HTTPException, UploadFile, Body
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.profiling import profile_dataframe
 from app.quality import check_data_quality
 from app.cleaning import clean_dataframe
+from app.file_loader import load_dataframe, LoadError, SUPPORTED_EXTENSIONS
 from app.ai_service import ask_groq, generate_dashboard_insights
 from app.data_analysis import (
     build_dataset_context,
@@ -75,6 +78,9 @@ app.add_middleware(
 # --------------------------------------------------
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+SAMPLE_FILENAME = "datalens_sample_sales.csv"
+SAMPLE_PATH = Path(__file__).resolve().parent / "sample_data" / SAMPLE_FILENAME
 
 # Store original uploaded datasets
 datasets = {}
@@ -160,66 +166,11 @@ def health_check():
 
 
 # --------------------------------------------------
-# 5. Upload CSV endpoint
+# 5. Upload endpoints (CSV, Excel and the built-in sample)
 # --------------------------------------------------
 
-@app.post("/api/v1/datasets/upload")
-async def upload_csv(file: UploadFile = File(...)):
-
-    # Validate filename
-    if not file.filename or not file.filename.lower().endswith(".csv"):
-        raise HTTPException(
-            status_code=415,
-            detail="Only CSV files are supported.",
-        )
-
-    try:
-        # Read uploaded file with size limit
-        contents = await file.read(MAX_FILE_SIZE + 1)
-
-        if not contents:
-            raise HTTPException(
-                status_code=400,
-                detail="The uploaded file is empty.",
-            )
-
-        if len(contents) > MAX_FILE_SIZE:
-            raise HTTPException(
-                status_code=413,
-                detail="File too large. Maximum allowed size is 10 MB.",
-            )
-
-        # Parse CSV using Pandas
-        try:
-            df = pd.read_csv(BytesIO(contents))
-
-        except pd.errors.EmptyDataError:
-            raise HTTPException(
-                status_code=400,
-                detail="The CSV does not contain readable data or headers.",
-            )
-
-        except (pd.errors.ParserError, UnicodeDecodeError):
-            raise HTTPException(
-                status_code=400,
-                detail="Unable to parse the CSV. Check its encoding and format.",
-            )
-
-    finally:
-        await file.close()
-
-    # Validate columns
-    if len(df.columns) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="The CSV does not contain any columns.",
-        )
-
-    if any(not isinstance(col, str) or not col.strip() for col in df.columns):
-        raise HTTPException(
-            status_code=400,
-            detail="Column names must not be empty.",
-        )
+def register_dataset(df, filename, load_info):
+    """Store a loaded dataset and build its first report."""
 
     # Generate a unique dataset ID
     dataset_id = str(uuid4())
@@ -238,11 +189,79 @@ async def upload_csv(file: UploadFile = File(...)):
 
     return {
         "dataset_id": dataset_id,
-        "filename": file.filename,
+        "filename": filename,
         "status": "success",
+        "load_info": load_info,
         "profile": profile,
         "quality_report": quality_report,
     }
+
+
+@app.post("/api/v1/datasets/upload")
+async def upload_file(file: UploadFile = File(...)):
+
+    filename = file.filename or ""
+
+    # Validate filename
+    if not filename.lower().endswith(SUPPORTED_EXTENSIONS):
+        raise HTTPException(
+            status_code=415,
+            detail="Please upload a CSV or Excel (.xlsx) file.",
+        )
+
+    try:
+        # Read uploaded file with size limit
+        contents = await file.read(MAX_FILE_SIZE + 1)
+    finally:
+        await file.close()
+
+    if not contents:
+        raise HTTPException(
+            status_code=400,
+            detail="The uploaded file is empty.",
+        )
+
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum allowed size is 10 MB.",
+        )
+
+    # Parsing and profiling are CPU work, so run them off the event loop
+    try:
+        df, load_info = await run_in_threadpool(
+            load_dataframe, contents, filename
+        )
+    except LoadError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    return await run_in_threadpool(
+        register_dataset, df, filename, load_info
+    )
+
+
+@app.post("/api/v1/datasets/sample")
+def load_sample_dataset():
+    """Load the bundled, deliberately messy demo dataset."""
+
+    if not SAMPLE_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Sample dataset is not installed on the server.",
+        )
+
+    try:
+        df, load_info = load_dataframe(SAMPLE_PATH.read_bytes(), SAMPLE_FILENAME)
+    except LoadError as error:
+        raise HTTPException(status_code=500, detail=str(error))
+
+    load_info["notes"] = [
+        "This is demo data with missing values, duplicates, mixed date "
+        "formats and inconsistent spellings added on purpose.",
+        *load_info.get("notes", []),
+    ]
+
+    return register_dataset(df, SAMPLE_FILENAME, load_info)
 
 
 # --------------------------------------------------

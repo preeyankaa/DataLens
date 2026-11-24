@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import {
   WandSparkles,
@@ -10,15 +9,25 @@ import {
 
 const API_URL = "http://127.0.0.1:8000";
 
-const isNumericColumn = (dataType) =>
-  ["int64", "float64", "int", "float", "number"].includes(
-    String(dataType).toLowerCase()
-  );
+/* ---------- column helpers ----------
+   The backend now sends `inferred_type` (numeric, categorical, date, id,
+   text, boolean) worked out from the data itself. When it is missing, the
+   older name/type guesses are used. */
 
 const normalizeName = (name) =>
   String(name).toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
-const isIdentifierColumn = (name) => {
+const isNumericColumn = (details = {}) => {
+  if (details.inferred_type) return details.inferred_type === "numeric";
+
+  return ["int64", "float64", "int", "float", "number"].includes(
+    String(details.data_type).toLowerCase()
+  );
+};
+
+const isIdentifierColumn = (name, details = {}) => {
+  if (details.inferred_type) return details.inferred_type === "id";
+
   const normalized = normalizeName(name);
   const tokens = normalized.split("_");
 
@@ -32,6 +41,8 @@ const isIdentifierColumn = (name) => {
 };
 
 const isDateColumn = (name, details = {}) => {
+  if (details.inferred_type) return details.inferred_type === "date";
+
   const normalized = normalizeName(name);
   const dataType = String(details.data_type || "").toLowerCase();
 
@@ -43,32 +54,23 @@ const isDateColumn = (name, details = {}) => {
   );
 };
 
+const isReturnColumn = (name) =>
+  ["returned", "is_returned", "return_status"].includes(normalizeName(name));
+
+const isTotalColumn = (name) =>
+  ["line_total", "total", "revenue", "sales_amount"].includes(
+    normalizeName(name)
+  );
+
+const isDiscountColumn = (name) => normalizeName(name).includes("discount");
+
 const getDefaultStrategy = (name, details) => {
-  const normalized = normalizeName(name);
-
-  if (
-    ["returned", "is_returned", "return_status"].includes(normalized)
-  ) {
-    return "skip";
-  }
-
-  if (isIdentifierColumn(name)) {
-    return "skip";
-  }
-
-  if (isDateColumn(name, details)) {
-    return "drop_rows";
-  }
-
-  if (
-    ["line_total", "total", "revenue", "sales_amount"].includes(normalized)
-  ) {
-    return "skip";
-  }
-
-  if (isNumericColumn(details.data_type)) {
-    return "median";
-  }
+  if (isReturnColumn(name) || isIdentifierColumn(name, details)) return "skip";
+  if (isDateColumn(name, details)) return "drop_rows";
+  if (isTotalColumn(name)) return "skip";
+  // An empty discount almost always means "no discount".
+  if (isDiscountColumn(name) && isNumericColumn(details)) return "zero";
+  if (isNumericColumn(details)) return "median";
 
   return "unknown";
 };
@@ -88,7 +90,16 @@ const createInitialMissingSelection = (columns) => {
   return initial;
 };
 
-function CleaningSection({ datasetId, profile }) {
+const getInconsistentColumns = (qualityReport) =>
+  (qualityReport?.issues || [])
+    .filter((issue) => issue.type === "inconsistent_text" && issue.column)
+    .map((issue) => ({
+      column: issue.column,
+      count: issue.count,
+      example: (issue.examples?.[0] || []).join("  /  "),
+    }));
+
+function CleaningSection({ datasetId, profile, qualityReport }) {
   const columns = profile?.columns || {};
   const statistics = profile?.numerical_statistics || {};
 
@@ -97,17 +108,27 @@ function CleaningSection({ datasetId, profile }) {
   );
 
   const numericalColumns = Object.keys(statistics).filter(
-    (name) => !isIdentifierColumn(name)
+    (name) => !isIdentifierColumn(name, columns[name])
   );
 
   const dateColumns = Object.entries(columns)
     .filter(([name, details]) => isDateColumn(name, details))
     .map(([name]) => name);
 
+  const inconsistentColumns = getInconsistentColumns(qualityReport);
+
+  const mixedDateColumns = (qualityReport?.issues || [])
+    .filter((issue) => issue.type === "mixed_date_formats")
+    .map((issue) => issue.column);
+
   const profileSignature = Object.entries(columns)
     .map(([name, details]) =>
       `${name}:${details.missing_count}:${details.data_type}`
     )
+    .join("|");
+
+  const inconsistentSignature = inconsistentColumns
+    .map((item) => `${item.column}:${item.count}`)
     .join("|");
 
   const [removeDuplicates, setRemoveDuplicates] = useState(true);
@@ -117,6 +138,10 @@ function CleaningSection({ datasetId, profile }) {
   );
 
   const [selectedOutliers, setSelectedOutliers] = useState([]);
+
+  const [selectedCase, setSelectedCase] = useState(() =>
+    inconsistentColumns.map((item) => item.column)
+  );
 
   const [preview, setPreview] = useState(null);
   const [previewPayload, setPreviewPayload] = useState(null);
@@ -133,6 +158,7 @@ function CleaningSection({ datasetId, profile }) {
   useEffect(() => {
     setSelectedMissing(createInitialMissingSelection(columns));
     setSelectedOutliers([]);
+    setSelectedCase(inconsistentColumns.map((item) => item.column));
     setRemoveDuplicates(true);
 
     setPreview(null);
@@ -140,21 +166,25 @@ function CleaningSection({ datasetId, profile }) {
     setCleanedReady(false);
     setSuccess("");
     setError("");
-  }, [datasetId, profileSignature]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, profileSignature, inconsistentSignature]);
 
   const buildPayload = () => {
     const missingValues = {};
 
     Object.entries(selectedMissing).forEach(([name, settings]) => {
-      if (settings.enabled) {
-        missingValues[name] = {
-          strategy: settings.strategy,
-        };
-      }
+      if (!settings.enabled) return;
+
+      // "zero" is shown to the user as "Fill with 0"
+      missingValues[name] =
+        settings.strategy === "zero"
+          ? { strategy: "constant", value: 0 }
+          : { strategy: settings.strategy };
     });
 
     return {
       remove_duplicates: removeDuplicates,
+      merge_case_columns: selectedCase,
       missing_values: missingValues,
       date_columns: dateColumns,
       outlier_columns: selectedOutliers,
@@ -195,6 +225,16 @@ function CleaningSection({ datasetId, profile }) {
 
   const handleOutlierToggle = (name) => {
     setSelectedOutliers((current) =>
+      current.includes(name)
+        ? current.filter((item) => item !== name)
+        : [...current, name]
+    );
+
+    resetCleaningStatus();
+  };
+
+  const handleCaseToggle = (name) => {
+    setSelectedCase((current) =>
       current.includes(name)
         ? current.filter((item) => item !== name)
         : [...current, name]
@@ -280,7 +320,7 @@ function CleaningSection({ datasetId, profile }) {
       setCleanedReady(true);
 
       setSuccess(
-        "Cleaning applied successfully. Your cleaned dataset is ready for AI questions."
+        "Cleaning applied successfully. Your cleaned dataset is ready for charts and AI questions."
       );
     } catch (err) {
       setError(err.message || "Could not apply cleaning.");
@@ -349,18 +389,11 @@ function CleaningSection({ datasetId, profile }) {
   };
 
   const renderStrategyOptions = (name, details) => {
-    const normalized = normalizeName(name);
-
-    if (
-      ["returned", "is_returned", "return_status"].includes(normalized) ||
-      isIdentifierColumn(name)
-    ) {
+    if (isReturnColumn(name) || isIdentifierColumn(name, details)) {
       return <option value="skip">Keep missing values</option>;
     }
 
-    if (
-      ["line_total", "total", "revenue", "sales_amount"].includes(normalized)
-    ) {
+    if (isTotalColumn(name)) {
       return (
         <>
           <option value="skip">Keep missing values (recommended)</option>
@@ -379,12 +412,13 @@ function CleaningSection({ datasetId, profile }) {
       );
     }
 
-    if (isNumericColumn(details.data_type)) {
+    if (isNumericColumn(details)) {
       return (
         <>
           <option value="median">Median</option>
           <option value="mean">Mean</option>
           <option value="mode">Mode</option>
+          <option value="zero">Fill with 0</option>
           <option value="skip">Keep missing values</option>
         </>
       );
@@ -415,7 +449,10 @@ function CleaningSection({ datasetId, profile }) {
           <div className="cleaning-card-heading">
             <div>
               <h3>Remove duplicate rows</h3>
-              <p>Remove repeated records from your dataset.</p>
+              <p>
+                Remove repeated records. Spellings and dates are made
+                consistent first, so near-copies are caught too.
+              </p>
             </div>
 
             <label className="cleaning-toggle">
@@ -430,6 +467,50 @@ function CleaningSection({ datasetId, profile }) {
               <span />
             </label>
           </div>
+
+          <div className="cleaning-divider" />
+
+          <h3>Make spellings consistent</h3>
+          <p>
+            The same value is written in different ways. Without this, charts
+            split one group into several.
+          </p>
+
+          {inconsistentColumns.length > 0 ? (
+            inconsistentColumns.map((item) => (
+              <label className="cleaning-column-label cleaning-case-row" key={item.column}>
+                <input
+                  type="checkbox"
+                  checked={selectedCase.includes(item.column)}
+                  onChange={() => handleCaseToggle(item.column)}
+                />
+
+                <span>
+                  <strong>{item.column}</strong>
+                  <small>
+                    {item.count} cells differ
+                    {item.example ? ` · for example: ${item.example}` : ""}
+                  </small>
+                </span>
+              </label>
+            ))
+          ) : (
+            <p>No inconsistent spellings detected.</p>
+          )}
+
+          {dateColumns.length > 0 && (
+            <>
+              <div className="cleaning-divider" />
+
+              <h3>Dates</h3>
+              <p>
+                {dateColumns.join(", ")} will be converted to one format
+                (YYYY-MM-DD).
+                {mixedDateColumns.length > 0 &&
+                  ` ${mixedDateColumns.join(", ")} mixes two date styles. The cleaning report shows which dates were ambiguous.`}
+              </p>
+            </>
+          )}
 
           <div className="cleaning-divider" />
 
@@ -665,7 +746,8 @@ function CleaningSection({ datasetId, profile }) {
 
           {cleanedReady && (
             <p className="cleaning-note">
-              Your cleaned dataset is saved and available in AI Questions.
+              Your cleaned dataset is saved. See the cleaning report below, then
+              open Charts or AI Questions.
             </p>
           )}
         </div>

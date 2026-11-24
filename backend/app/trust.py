@@ -24,6 +24,7 @@ FLAG_CHANGE_PCT = 1.0
 
 _PREFIXES = [
     ("standardize_values_", "Replaced values"),
+    ("merge_case_", "Merged spellings"),
     ("standardize_", "Tidied text"),
     ("missing_", "Missing values"),
     ("date_", "Dates converted"),
@@ -96,6 +97,12 @@ def _describe(change_key, detail):
         return (
             f"{detail['converted']} dates converted to {detail['format']}; "
             f"{detail.get('invalid_or_missing', 0)} could not be read and were left empty."
+        )
+
+    if "values_merged" in detail:
+        return (
+            f"{detail['values_merged']} values were rewritten so the same thing is spelled one way "
+            f"({detail.get('groups_merged', 0)} groups of spellings merged, using the most common spelling)."
         )
 
     if "values_normalized" in detail:

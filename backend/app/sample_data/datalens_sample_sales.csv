@@ -1,0 +1,384 @@
+order_date,order_id,customer_id,customer,segment,channel,product_id,product,category,quantity,unit_price,discount_pct,line_total,returned
+09/19/2025,1001,30,Maya Diaz,Regular,Social,26,Yoga Mat,Sports,2,25.26,10,45.47,0
+10/15/2025,1002,156,Nina Cohen,regular,referral,31,Puzzle Set,toys ,1,15.6,0,15.6,0
+10/15/2025,1002,156,Nina Cohen,Regular,Referral,19,Wall Clock,Home,1,22.4,0,22.4,0
+15/10/2025,1002,156,Nina Cohen,Regular,Referral,31,Puzzle Set,Toys,1,15.6,0,15.6,0
+08/22/2025,1003,72,Lila Novak,Regular,social,15,Body Lotion,Beauty,1,11.25,5,10.69,0
+09/26/2025,1004,39,Quinn Patel,Loyal,Referral ,10,Hand Cream,Beauty,1,5.32,0,5.32,0
+26/09/2025,1004,39,Quinn Patel,Loyal,Referral,22,Cotton Shirt,Apparel,1,59.03,0,59.03,0
+09/26/2025,1004,39,Quinn Patel,Loyal,,11,Shampoo Bar,Beauty,2,7.09,0,14.18,0
+10/10/2025,1005,210,Sofia Diaz,regular,Email,18,Ceramic Mug,Home,3,35.7,15,91.04,1
+11/05/2025,1006,150,Leo Brown,LOYAL,Referral,21,Photo Frame,home ,1,9.8,0,9.8,0
+11/05/2025,1006,150,Leo Brown,Loyal,Referral ,28,Resistance Band,Sports,1,8.75,0,8.75,0
+09/12/2025,1007,195,Omar Khan,Loyal,referral,19,Wall Clock,Home,3,22.4,,67.2,0
+09/23/2025,1008,102,Ivan Weber,Loyal,Referral,14,Face Serum,Beauty,1,28.5,20,22.8,0
+11/12/2025,1009,234,Omar Mendez,New,Email,32,Toy Car,Toys,1,9.2,5,8.74,0
+08/25/2025,1010,213,Ivan Okafor,Regular,Paid search,16,Scented Candle,Home,1,35.35,5,33.58,0
+25/08/2025,1010,213,  Ivan  Okafor,Regular,Paid Search,32,Toy Car,Toys,1,9.2,5,8.74,0
+08/25/2025,1010,213,Ivan Okafor,Regular,PAID SEARCH,27,Water Bottle,Sports,2,12.4,5,23.56,0
+09/09/2025,1011,234,Omar Mendez,New,Referral,20,Table Lamp,Home,1,41.0,0,41.0,0
+09/09/2025,1011,234,Omar Mendez,New,Referral,30,Board Game,Toys,1,7.83,0,7.83,0
+09/09/2025,1011,234,Omar Mendez,,Referral,29,Jump Rope,Sports,1,6.3,0,6.3,0
+10/05/2025,1012,168,Ethan Nguyen,Loyal,Email,27,Water Bottle,sports ,1,12.4,5,11.78,0
+11/05/2025,1013,42,Mateo Silva,Loyal,Email,26,Yoga Mat,Sports,2,25.26,0,50.52,0
+11/05/2025,1013,42,Mateo Silva,Loyal,Email,29,Jump Rope,Sports,2,6.3,0,12.6,1
+11/05/2025,1013,42,Mateo Silva,Loyal,Email,14,Face Serum,Beauty,1,28.5,0,28.5,0
+11/05/2025,1013,42,Mateo Silva,Loyal,Email,29,Jump Rope,Sports,2,6.3,0,12.6,1
+09/14/2025,1014,36,Mateo Cohen,Regular,Referral ,17,Throw Pillow,Home,1,17.82,5,16.93,0
+08/20/2025,1015,153,Kai Brown,New,Referral,25,Running Cap,Apparel,1,14.9,20,11.92,0
+09/08/2025,1016,198,Zoe Okafor,Regular,Paid Search,33,Building Blocks,Toys,1,31.4,0,31.4,0
+09/08/2025,1016,198,Zoe Okafor,REGULAR,Paid Search ,21,Photo Frame,Home,2,9.8,0,19.6,1
+10/20/2025,1017,60,Quinn Sullivan,Loyal,Social,28,Resistance Band,Sports,1,8.75,0,8.75,0
+10/20/2025,1017,60,Quinn Sullivan,,social,29,,Sports,2,6.3,0,12.6,0
+10/20/2025,1017,60,Quinn Sullivan,Loyal,Social,12,Sheet Mask,Beauty,2,20.39,0,40.78,0
+08/29/2025,1018,84,Noah Cohen,Regular,Email,12,Sheet Mask,Beauty,2,20.39,5,38.74,0
+29/08/2025,1018,84,  Noah  Cohen,Regular,Email,24,Wool Scarf,Apparel,2,24.6,5,46.74,0
+09/05/2025,1019,180,Nina Patel,Champion,Referral ,13,Lip Balm,Beauty,3,3.99,10,10.77,0
+09/14/2025,1020,147,Maya Patel,Loyal,,24,Wool Scarf,Apparel,1,24.6,10,22.14,
+11/07/2025,1021,108,Nina Patel,Champion,Referral,17,Throw Pillow,home,1,17.82,0,17.82,0
+10/04/2025,1022,75,Ivan Diaz,regular,referral,17,Throw Pillow,Home,1,17.82,10,16.04,0
+10/04/2025,1022,75,Ivan Diaz,Regular,referral,31,Puzzle Set,Toys,1,15.6,10,14.04,0
+08/27/2025,1023,207,Zoe Silva,Regular,Social,13,Lip Balm,Beauty,-1,3.99,0,7.98,0
+10/03/2025,1024,207,Zoe Silva,regular,Social ,11,Shampoo Bar,Beauty,2,7.09,0,14.18,0
+10/03/2025,1024,207,Zoe Silva,Regular,Social,14,Face Serum,Beauty,1,28.5,0,28.5,
+09/26/2025,1025,192,Ethan Diaz,Loyal,Referral,14,Face Serum,Beauty,1,28.5,5,27.07,0
+26/09/2025,1025,192,Ethan Diaz,Loyal,Referral,29,Jump Rope,Sports,1,6.3,5,5.98,0
+09/07/2025,1026,147,Maya Patel,Loyal,Social,29,Jump Rope,Sports,2,6.3,5,11.97,0
+09/07/2025,1026,147,Maya Patel,Loyal,Social,29,Jump Rope,Sports,2,6.3,5,11.97,0
+09/07/2025,1026,147,Maya Patel,LOYAL,Social,13,Lip Balm,beauty,3,3.99,5,11.37,0
+21/10/2025,1027,207,Zoe Silva,Regular,Referral,27,Water Bottle,Sports,1,12.4,10,11.16,1
+10/21/2025,1027,207,Zoe Silva,Regular,Referral,17,Throw Pillow,Home,1,17.82,10,16.04,0
+10/12/2025,1028,99,Ava Rossi,Loyal,Referral,16,Scented Candle,Home,1,35.35,5,33.58,0
+10/12/2025,1028,99,Ava Rossi,loyal,Referral,30,Board Game,Toys,1,7.83,5,7.44,0
+11/01/2025,1029,222,Zoe Sullivan,Champion,Direct,31,Puzzle Set,Toys,2,15.6,0,31.2,
+11/01/2025,1029,222,Zoe Sullivan,Champion,Direct,29,Jump Rope,Sports,1,6.3,0,6.3,0
+09/06/2025,1030,51,Ivan Cohen,Regular,Paid search,28,Resistance Band,Sports,2,8.75,0,17.5,0
+09/06/2025,1030,51,Ivan Cohen,Regular,Paid Search,12,Sheet Mask,Beauty,1,20.39,0,20.39,0
+10/06/2025,1031,75,Ivan Diaz,Regular,Referral,20,Table Lamp,Home,1,41.0,0,41.0,1
+11/20/2025,1032,180,Nina Patel,,Social,11,Shampoo Bar,Beauty,1,7.09,15,6.03,0
+22/08/2025,1033,111,Ethan Sullivan,New,Paid Search,23,Denim Jacket,Apparel,1,88.0,0,88.0,0
+10/24/2025,1034,210,Sofia Diaz,Regular,referral,29,Jump Rope,Sports,1,6.3,5,5.98,0
+09/28/2025,1035,138,Kai Khan,Champion,Social,16,Scented Candle,Home,1,35.35,15,30.05,0
+11/15/2025,1036,57,Ivan Mendez,Champion,Referral,27,Water Bottle,sports ,1,12.4,20,9.92,0
+22/08/2025,1037,135,Maya Diaz,Loyal,Referral,22,Cotton Shirt,Apparel,1,59.03,5,56.08,0
+11/01/2025,1038,78,Quinn Brown,New,Social,17,Throw Pillow,Home,1,17.82,10,16.04,0
+11/01/2025,1038,78,Quinn Brown,New,Social,30,Board Game,Toys,1,7.83,10,7.05,0
+09/05/2025,1039,45,Ava Mendez,New,Social ,28,Resistance Band,Sports,3,8.75,5,24.94,0
+08/28/2025,1040,90,Quinn Silva,Loyal,Direct,22,Cotton Shirt,Apparel,1,59.03,,56.08,0
+08/28/2025,1040,90,Quinn Silva,LOYAL,Direct,21,Photo Frame,Home,1,9.8,5,9.31,0
+10/02/2025,1041,177,Leo Mendez,New,Paid Search ,27,Water Bottle,Sports,1,12.4,,11.16,0
+10/02/2025,1041,177,Leo Mendez,New,Paid Search ,27,Water Bottle,Sports,1,12.4,,11.16,0
+10/02/2025,1041,177,Leo Mendez,New,Paid Search,18,Ceramic Mug,Home,1,35.7,10,32.13,0
+10/29/2025,1042,57,  Ivan  Mendez,Champion,Referral,11,Shampoo Bar,Beauty,,7.09,20,5.67,0
+10/29/2025,1042,57,  Ivan  Mendez,Champion,Referral,11,Shampoo Bar,Beauty,,7.09,20,5.67,0
+10/29/2025,1043,141,Mateo Nguyen,Loyal,Referral ,31,Puzzle Set,Toys,1,15.6,5,,0
+10/29/2025,1043,141,Mateo Nguyen,Loyal,referral,22,Cotton Shirt,Apparel,3,59.03,5,168.24,1
+26/08/2025,1044,123,Kai Patel,Loyal,Paid Search,16,Scented Candle,Home,1,35.35,0,35.35,0
+31/10/2025,1045,213,Ivan Okafor,Regular,Email,13,Lip Balm,Beauty,1,3.99,5,3.79,0
+10/31/2025,1045,213,Ivan Okafor,Regular,Email,21,Photo Frame,Home,1,9.8,,9.31,0
+10/14/2025,1046,117,Omar Cohen,regular,Referral,19,Wall Clock,Home,1,22.4,,20.16,0
+09/23/2025,1047,213,Ivan Okafor,Regular,Social,22,Cotton Shirt,Apparel,2,59.03,0,118.06,0
+09/23/2025,1047,213,Ivan Okafor,Regular,Social,28,Resistance Band,Sports,1,8.75,0,8.75,0
+11/09/2025,1048,177,  Leo  Mendez,new,Paid Search,26,Yoga Mat,Sports,1,25.26,5,24.0,0
+11/09/2025,1048,177,Leo Mendez,New,Paid Search,28,Resistance Band,Sports,1,8.75,5,8.31,0
+10/02/2025,1049,162,Kai Park,Regular,Direct,17,Throw Pillow,Home,1,17.82,0,17.82,0
+11/11/2025,1050,192,Ethan Diaz,Loyal,Referral,11,Shampoo Bar,Beauty,1,7.09,0,7.09,0
+11/11/2025,1050,192,Ethan Diaz,Loyal,Referral,32,Toy Car,Toys,1,9.2,0,9.2,0
+11/11/2025,1050,192,Ethan Diaz,Loyal,Referral,13,Lip Balm,Beauty,2,3.99,0,7.98,0
+11/07/2025,1051,237,Kai Okafor,Loyal,Social,20,Table Lamp,Home,1,41.0,5,38.95,0
+11/07/2025,1051,237,  Kai  Okafor,Loyal,Social,25,Running Cap,Apparel,1,14.9,5,14.15,0
+10/27/2025,1052,144,Riley Weber,Regular,Email,29,Jump Rope,Sports,40,6.3,0,226.8,0
+27/10/2025,1052,144,Riley Weber,Regular,,24,Wool Scarf,Apparel,1,24.6,0,24.6,1
+09/27/2025,1053,105,Maya Rossi,Regular, Email,25,Running Cap,Apparel,1,14.9,0,14.9,0
+11/17/2025,1054,63,Mateo Brown,Loyal,referral,14,Face Serum,Beauty,1,28.5,0,28.5,
+10/27/2025,1055,231,Omar Nguyen,LOYAL,Referral,28,Resistance Band,Sports,2,8.75,0,17.5,0
+10/23/2025,1056,189,Mateo Sullivan,Champion,Email,31,Puzzle Set,Toys,1,15.6,10,14.04,0
+10/23/2025,1056,189,Mateo Sullivan,Champion,Email,32,Toy Car,Toys,1,9.2,10,8.28,0
+10/03/2025,1057,120,Ethan Silva,Champion,Email,18,Ceramic Mug,Home,1,35.7,0,35.7,0
+08/21/2025,1058,66,Zoe Mendez,Loyal,Referral,30,Board Game,Toys,1,7.83,,7.83,0
+09/16/2025,1059,33,Zoe Nguyen,New,Social,13,Lip Balm,Beauty,1,3.99,0,3.99,
+09/16/2025,1059,33,  Zoe  Nguyen,New,Social,19,Wall Clock,Home,1,22.4,0,22.4,0
+10/24/2025,1060,72,Lila Novak,,Referral,12,Sheet Mask,Beauty,2,20.39,10,36.7,0
+24/10/2025,1060,72,Lila Novak,Regular,Referral,31,Puzzle Set,Toys,2,15.6,10,28.08,0
+09/20/2025,1061,228,Noah Diaz,Champion,Referral,32,Toy Car,Toys,1,9.2,15,7.82,0
+09/20/2025,1061,228,Noah Diaz,Champion,Referral,33,Building Blocks,Toys,1,31.4,15,26.69,0
+09/20/2025,1061,228,Noah Diaz,Champion,Referral,14,Face Serum,Beauty,1,28.5,15,24.22,0
+10/10/2025,1062,228,  Noah  Diaz,Champion,Referral,20,Table Lamp,Home,1,41.0,10,36.9,0
+10/10/2025,1062,228,Noah Diaz,Champion,Referral,24,Wool Scarf,Apparel,2,,10,44.28,0
+09/07/2025,1063,117,  Omar  Cohen,Regular,referral,13,Lip Balm,Beauty,1,3.99,0,3.99,0
+09/07/2025,1063,117,Omar Cohen,Regular,Referral,27,Water Bottle,Sports,2,12.4,0,24.8,0
+09/07/2025,1063,117,  Omar  Cohen,Regular,referral,13,Lip Balm,Beauty,1,3.99,0,3.99,0
+09/07/2025,1063,117,Omar Cohen,Regular,Referral ,26,Yoga Mat,Sports,1,25.26,0,25.26,0
+09/03/2025,1064,228,Noah Diaz,Champion,social,15,Body Lotion,Beauty,1,11.25,10,10.12,0
+26/10/2025,1065,186,Quinn Rossi,Loyal,Referral,16,Scented Candle,Home,1,35.35,15,30.05,1
+11/08/2025,1066,150,Leo Brown,Loyal,Referral,23,Denim Jacket,Apparel,1,88.0,0,88.0,0
+11/08/2025,1066,150,Leo Brown,Loyal,Referral,23,Denim Jacket,Apparel,1,88.0,,88.0,0
+09/19/2025,1067,162,Kai Park,Regular,Email,19,Wall Clock,Home,1,22.4,5,21.28,1
+19/09/2025,1067,162,Kai Park,Regular,Email,14,Face Serum,Beauty,1,28.5,,27.07,
+10/28/2025,1068,96,Mateo Brown,Regular,Referral,33,Building Blocks,Toys,1,31.4,10,28.26,0
+09/18/2025,1069,117,Omar Cohen,Regular,Referral,20,Table Lamp,Home,1,41.0,0,41.0,0
+10/05/2025,1070,177,Leo Mendez,New,Referral,22,Cotton Shirt,Apparel,2,59.03,10,106.25,0
+10/05/2025,1070,177,Leo Mendez,New,Referral,11,Shampoo Bar,Beauty,1,7.09,10,6.38,0
+10/05/2025,1070,177,Leo Mendez,New,Referral,23,Denim Jacket,Apparel,1,88.0,10,79.2,
+08/25/2025,1071,198,Zoe Okafor,Regular,Paid Search,29,Jump Rope,sports,1,6.3,15,5.35,0
+08/25/2025,1071,198,Zoe Okafor,Regular,Paid Search,18,Ceramic Mug,Home,1,35.7,15,30.35,0
+08/25/2025,1071,198,Zoe Okafor,Regular,Paid Search,15,Body Lotion,Beauty,2,11.25,,19.12,1
+10/04/2025,1072,120,Ethan Silva,Champion,Direct,21,Photo Frame,Home,1,9.8,0,9.8,0
+10/15/2025,1073,66,Zoe Mendez,Loyal,Direct,26,Yoga Mat,Sports,1,25.26,5,24.0,0
+15/10/2025,1073,66,Zoe Mendez,Loyal,Direct,11,Shampoo Bar,Beauty,1,7.09,5,6.74,0
+10/13/2025,1074,186,Quinn Rossi,Loyal,Referral,14,Face Serum,Beauty,1,28.5,5,27.07,0
+09/02/2025,1075,63,Mateo Brown,Loyal,Paid Search,19,Wall Clock,Home,1,22.4,,20.16,0
+09/02/2025,1075,63,Mateo Brown,Loyal,Paid Search,19,Wall Clock,Home,1,22.4,,20.16,0
+25/10/2025,1076,84,Noah Cohen,Regular,Paid Search,26,,Sports,1,25.26,0,25.26,0
+25/10/2025,1076,84,Noah Cohen,Regular,Paid Search,32,Toy Car,Toys,1,9.2,0,9.2,0
+08/23/2025,1077,66,Zoe Mendez,Loyal,Referral,31,Puzzle Set,Toys,2,15.6,0,31.2,0
+10/07/2025,1078,195,Omar Khan,Loyal,Paid Search,14,Face Serum,Beauty,1,28.5,10,25.65,0
+10/31/2025,1079,153,Kai Brown,NEW,Referral,33,,Toys,2,31.4,15,53.38,1
+09/05/2025,1080,129,Riley Cohen,Loyal,Paid Search,30,Board Game,Toys,1,7.83,10,7.05,0
+08/23/2025,1081,69,Omar Mendez,Champion,Referral,16,Scented Candle,Home,1,35.35,0,35.35,0
+08/22/2025,1082,183,Noah Brown,Regular,Referral,16,,Home,1,35.35,10,31.82,0
+11/11/2025,1083,210,Sofia Diaz,Regular,Social,19,Wall Clock,Home,1,22.4,0,22.4,0
+11/11/2025,1083,210,Sofia Diaz,Regular,Social,19,Wall Clock,Home,1,22.4,0,22.4,0
+11/11/2025,1083,210,Sofia Diaz,Regular,Social,33,Building Blocks,Toys,1,31.4,0,31.4,0
+09/03/2025,1084,120,Ethan Silva,Champion,Email,18,Ceramic Mug,Home,1,35.7,5,33.91,0
+11/13/2025,1085,234,Omar Mendez,New,referral,11,Shampoo Bar,Beauty,1,7.09,0,7.09,0
+10/18/2025,1086,225,Lila Cohen,Loyal,Referral,30,Board Game,Toys,1,7.83,5,7.44,0
+11/20/2025,1087,147,Maya Patel,Loyal,Referral,25,Running Cap,Apparel,2,14.9,15,25.33,0
+09/16/2025,1088,192,Ethan Diaz,Loyal,paid search,26,Yoga Mat,Sports,3,25.26,20,60.62,0
+09/16/2025,1088,192,Ethan Diaz,Loyal,Paid Search,18,Ceramic Mug,Home,1,35.7,20,28.56,0
+16/09/2025,1088,192,Ethan Diaz,loyal,Paid Search,12,Sheet Mask,Beauty,1,20.39,20,16.31,0
+10/02/2025,1089,126,Nina Novak,Loyal,Referral ,11,,Beauty,1,7.09,0,7.09,0
+10/02/2025,1089,126,Nina Novak,Loyal,Referral,23,Denim Jacket,Apparel,1,88.0,0,88.0,0
+09/20/2025,1090,135,Maya Diaz,Loyal,Email,16,Scented Candle,home,1,35.35,0,35.35,0
+10/26/2025,1091,81,Ethan Silva,Regular,Email,12,Sheet Mask,Beauty,1,20.39,0,20.39,0
+10/26/2025,1091,81,Ethan Silva,Regular,Email,31,Puzzle Set,Toys,1,15.6,,15.6,0
+10/18/2025,1092,150,Leo Brown,Loyal,paid search,14,Face Serum,Beauty,3,28.5,0,85.5,0
+18/10/2025,1092,150,Leo Brown,Loyal,Paid Search,11,Shampoo Bar,Beauty,1,7.09,0,7.09,
+09/18/2025,1093,69,  Omar  Mendez,Champion,Paid search,24,Wool Scarf,Apparel,1,24.6,20,19.68,1
+09/18/2025,1093,69,Omar Mendez,Champion,Paid Search,31,Puzzle Set,Toys,1,15.6,20,12.48,0
+09/18/2025,1093,69,Omar Mendez,Champion,PAID SEARCH,33,Building Blocks,Toys,1,31.4,20,25.12,0
+10/13/2025,1094,108,Nina Patel,Champion,Referral,10,Hand Cream,Beauty,1,5.32,0,5.32,1
+10/03/2025,1095,75,Ivan Diaz,Regular,Referral,32,Toy Car,toys ,1,9.2,10,8.28,0
+10/21/2025,1096,165,  Riley  Mendez,REGULAR,Referral,31,Puzzle Set,Toys,1,15.6,0,15.6,1
+,1097,51,Ivan Cohen,Regular,Referral,13,Lip Balm,Beauty,1,3.99,0,3.99,0
+10/20/2025,1097,51,Ivan Cohen,Regular,Referral,12,,Beauty,1,20.39,0,20.39,0
+20/10/2025,1097,51,Ivan Cohen,Regular,Referral,14,Face Serum,Beauty,2,28.5,0,57.0,0
+,1098,33,Zoe Nguyen,New,Paid Search,12,Sheet Mask,Beauty,1,20.39,20,16.31,0
+15/09/2025,1098,33,Zoe Nguyen,new,Paid Search,14,Face Serum,Beauty,2,28.5,20,45.6,1
+09/01/2025,1099,33,Zoe Nguyen,NEW,Email,20,Table Lamp,Home,2,41.0,,69.7,0
+09/01/2025,1099,33,Zoe Nguyen,New,Email,16,Scented Candle,Home,1,35.35,15,30.05,1
+11/09/2025,1100,204,Noah Rossi,New,Paid Search,15,Body Lotion,Beauty,1,11.25,0,11.25,0
+10/27/2025,1101,201,Kai Cohen,Champion,Paid search,30,Board Game,Toys,40,7.83,15,281.88,1
+10/27/2025,1101,201,Kai Cohen,Champion,Paid Search,14,Face Serum,Beauty,1,28.5,,24.22,0
+10/27/2025,1101,201,Kai Cohen,Champion,Paid Search,32,Toy Car,Toys,1,9.2,15,7.82,0
+08/24/2025,1102,177,Leo Mendez,New,Paid Search,23,Denim Jacket,Apparel,3,88.0,5,250.8,0
+09/04/2025,1103,81,Ethan Silva,REGULAR,Paid Search,12,Sheet Mask,Beauty,2,20.39,15,34.66,1
+09/04/2025,1103,81,Ethan Silva,Regular,Paid Search,12,Sheet Mask,Beauty,1,20.39,15,17.33,0
+10/26/2025,1104,72,Lila Novak,Regular,,22,Cotton Shirt,Apparel,1,59.03,5,56.08,
+10/26/2025,1104,72,Lila Novak,Regular,Referral,19,Wall Clock,Home,1,22.4,5,21.28,0
+10/26/2025,1104,72,Lila Novak,Regular,Referral,22,Cotton Shirt,Apparel,1,59.03,5,56.08,1
+09/27/2025,1105,81,Ethan Silva,Regular,Paid Search,32,Toy Car,toys ,2,9.2,0,18.4,
+09/27/2025,1105,81,Ethan Silva,Regular,Paid Search,14,Face Serum,Beauty,1,28.5,0,28.5,0
+09/18/2025,1106,168,Ethan Nguyen,Loyal,Social ,30,Board Game,Toys,1,7.83,0,7.83,0
+09/18/2025,1106,168,Ethan Nguyen,Loyal,Social,15,Body Lotion,Beauty,1,11.25,0,11.25,0
+10/12/2025,1107,222,Zoe Sullivan,Champion,Referral,22,Cotton Shirt,Apparel,1,59.03,0,59.03,1
+10/24/2025,1108,84,Noah Cohen,Regular,Direct,16,Scented Candle,Home,1,35.35,20,28.28,0
+10/24/2025,1108,84,Noah Cohen,Regular,Direct,29,Jump Rope,Sports,1,6.3,20,5.04,0
+10/24/2025,1108,84,Noah Cohen,Regular,Direct,25,Running Cap,Apparel,1,1490.0,20,11.92,0
+10/24/2025,1108,84,Noah Cohen,Regular,Direct,25,Running Cap,Apparel,1,1490.0,20,11.92,0
+09/09/2025,1109,213,Ivan Okafor,Regular,Paid Search,18,Ceramic Mug,home,2,35.7,0,71.4,
+09/03/2025,1110,54,Omar Cohen,Regular,Referral,33,Building Blocks,Toys,1,31.4,0,31.4,0
+10/02/2025,1111,69,  Omar  Mendez,Champion,Referral,28,Resistance Band,Sports,1,,10,7.88,0
+13/09/2025,1112,111,Ethan Sullivan,New,Email,30,Board Game,toys,3,7.83,0,23.49,1
+09/13/2025,1112,111,Ethan Sullivan,New,EMAIL,19,Wall Clock,Home,1,22.4,0,22.4,0
+09/13/2025,1112,111,  Ethan  Sullivan,New,Email,21,Photo Frame,Home,1,9.8,0,9.8,0
+09/19/2025,1113,57,Ivan Mendez,Champion,Direct,17,Throw Pillow,Home,1,17.82,0,17.82,0
+10/17/2025,1114,72,Lila Novak,Regular,Referral,22,Cotton Shirt,Apparel,1,59.03,0,59.03,1
+10/17/2025,1114,72,Lila Novak,Regular,Referral,29,Jump Rope,Sports,1,6.3,0,6.3,0
+11/09/2025,1115,96,Mateo Brown,Regular,Referral,20,Table Lamp,Home,1,41.0,5,38.95,0
+09/15/2025,1116,141,Mateo Nguyen,,Direct,27,Water Bottle,Sports,1,12.4,10,11.16,0
+21/10/2025,1117,141,Mateo Nguyen,Loyal,Email,16,Scented Candle,home,1,35.35,5,33.58,0
+10/21/2025,1117,141,Mateo Nguyen,LOYAL,Email,14,Face Serum,Beauty,1,28.5,5,27.07,0
+21/10/2025,1117,141,  Mateo  Nguyen,loyal,Email,32,Toy Car,Toys,2,9.2,5,17.48,0
+11/16/2025,1118,159,Riley Novak,Regular,Referral,17,Throw Pillow,Home,1,17.82,20,14.26,0
+16/11/2025,1118,159,Riley Novak,Regular,referral,32,Toy Car,Toys,1,9.2,20,7.36,0
+09/26/2025,1119,39,Quinn Patel,Loyal,Referral,32,Toy Car,Toys,1,9.2,5,8.74,0
+09/26/2025,1119,39,  Quinn  Patel,Loyal,Referral,25,Running Cap,Apparel,1,14.9,5,14.15,0
+31/08/2025,1120,42,Mateo Silva,Loyal,Social,33,Building Blocks,toys,2,31.4,10,56.52,0
+08/27/2025,1121,93,Riley Brown,Loyal,Referral,31,Puzzle Set,Toys,1,15.6,10,14.04,0
+10/13/2025,1122,33,Zoe Nguyen,New,Email,17,Throw Pillow,Home,1,17.82,15,15.15,0
+11/01/2025,1123,36,Mateo Cohen,Regular,Referral,12,Sheet Mask,beauty,1,,15,17.33,0
+11/01/2025,1123,36,Mateo Cohen,Regular,Referral,21,Photo Frame,Home,2,9.8,15,16.66,0
+09/08/2025,1124,210,Sofia Diaz,Regular,Referral,19,Wall Clock,Home,3,22.4,0,67.2,1
+09/08/2025,1124,210,Sofia Diaz,Regular,Referral,25,Running Cap,Apparel,1,14.9,0,14.9,0
+10/13/2025,1125,213,Ivan Okafor,Regular,Paid Search,12,Sheet Mask,Beauty,2,20.39,10,36.7,0
+10/13/2025,1125,213,Ivan Okafor,Regular,Paid Search,29,Jump Rope,Sports,1,6.3,10,5.67,0
+08/24/2025,1126,126,Nina Novak,loyal,,19,Wall Clock,Home,3,22.4,0,67.2,0
+08/24/2025,1126,126,Nina Novak,Loyal,Paid Search,24,Wool Scarf,Apparel,1,24.6,0,24.6,
+10/27/2025,1127,216,Sofia Park,Regular,Paid Search,31,Puzzle Set,Toys,3,15.6,15,39.78,0
+11/07/2025,1128,42,Mateo Silva,Loyal,Referral,13,Lip Balm,Beauty,1,3.99,15,3.39,1
+11/07/2025,1128,42,Mateo Silva,Loyal,referral,16,Scented Candle,Home,1,35.35,15,30.05,0
+11/10/2025,1129,195,Omar Khan,Loyal,Referral,11,Shampoo Bar,Beauty,2,7.09,0,14.18,0
+11/10/2025,1129,195,Omar Khan,Loyal,Referral ,21,,Home,1,,0,9.8,0
+11/10/2025,1129,195,Omar Khan,Loyal,referral,26,Yoga Mat,Sports,1,25.26,0,25.26,0
+09/05/2025,1130,162,Kai Park,Regular,Paid Search,12,Sheet Mask,Beauty,1,20.39,5,19.37,0
+09/05/2025,1130,162,Kai Park,Regular,Paid Search,33,,Toys,1,31.4,5,29.83,0
+09/05/2025,1130,162,Kai Park,Regular,paid search,32,Toy Car,Toys,1,9.2,5,8.74,0
+08/27/2025,1131,144,Riley Weber,Regular,Referral,10,Hand Cream,Beauty,2,5.32,,10.64,0
+08/27/2025,1131,144,Riley Weber,Regular,Referral,17,Throw Pillow,Home,3,17.82,0,53.46,0
+09/28/2025,1132,168,Ethan Nguyen,Loyal,Direct,10,Hand Cream,Beauty,1,5.32,10,4.79,0
+10/28/2025,1133,159,Riley Novak,REGULAR,Social ,33,Building Blocks,Toys,1,31.4,15,26.69,0
+09/27/2025,1134,159,  Riley  Novak,Regular,Direct,13,Lip Balm,Beauty,3,3.99,5,11.37,0
+13/11/2025,1135,108,Nina Patel,Champion,Referral,33,Building Blocks,toys,2,31.4,0,62.8,0
+11/11/2025,1136,81,Ethan Silva,Regular,Paid Search,22,Cotton Shirt,Apparel,1,59.03,10,53.13,0
+11/11/2025,1136,81,Ethan Silva,Regular,PAID SEARCH,10,Hand Cream,Beauty,1,,10,4.79,0
+10/30/2025,1137,132,Ivan Diaz,Regular,EMAIL,23,Denim Jacket,Apparel,2,88.0,5,167.2,1
+10/11/2025,1138,78,  Quinn  Brown,New,Referral,22,Cotton Shirt,Apparel,-1,59.03,,47.22,0
+11/15/2025,1139,114,Noah Park,Regular,EMAIL,17,Throw Pillow,Home,3,,0,53.46,1
+11/02/2025,1140,177,Leo Mendez,New,Referral,24,Wool Scarf,Apparel,3,24.6,5,70.11,0
+09/28/2025,1141,159,  Riley  Novak,Regular,EMAIL,28,Resistance Band,Sports,1,8.75,5,8.31,0
+09/13/2025,1142,105,Maya Rossi,Regular,Referral,28,Resistance Band,Sports,2,8.75,,17.5,0
+10/19/2025,1143,204,Noah Rossi,New,Social,20,Table Lamp,Home,1,41.0,,41.0,0
+10/19/2025,1143,204,  Noah  Rossi,New,Social,24,Wool Scarf,Apparel,1,24.6,0,24.6,0
+11/04/2025,1144,198,Zoe Okafor,,Email,25,Running Cap,Apparel,1,14.9,15,12.66,0
+10/25/2025,1145,111,Ethan Sullivan,New,Referral,15,Body Lotion,Beauty,1,11.25,0,11.25,0
+10/25/2025,1145,111,Ethan Sullivan,New,Referral,15,Body Lotion,Beauty,1,11.25,0,11.25,0
+10/25/2025,1145,111,Ethan Sullivan,New,Referral,22,Cotton Shirt,Apparel,2,59.03,0,118.06,0
+23/10/2025,1146,96,Mateo Brown,Regular,Paid Search,21,Photo Frame,Home,1,9.8,5,9.31,0
+10/31/2025,1147,75,Ivan Diaz,Regular,Referral,27,Water Bottle,Sports,,12.4,0,24.8,0
+08/24/2025,1148,159,Riley Novak,Regular,Email,19,Wall Clock,Home,1,22.4,0,22.4,0
+08/24/2025,1148,159,Riley Novak,Regular,Email,20,Table Lamp,Home,1,41.0,0,41.0,0
+10/25/2025,1149,30,Maya Diaz,Regular,Referral,25,Running Cap,Apparel,1,14.9,10,13.41,0
+08/20/2025,1150,108,Nina Patel,Champion,Paid Search,23,Denim Jacket,apparel,1,88.0,0,88.0,0
+09/25/2025,1151,195,Omar Khan,Loyal,Referral,31,Puzzle Set,Toys,2,15.6,5,29.64,0
+10/08/2025,1152,81,Ethan Silva,REGULAR,,18,Ceramic Mug,Home,1,35.7,,35.7,0
+11/03/2025,1153,132,Ivan Diaz,Regular,Referral,18,Ceramic Mug,Home,1,35.7,5,33.91,0
+09/02/2025,1154,105,Maya Rossi,Regular,referral,33,Building Blocks,Toys,1,31.4,15,26.69,0
+09/02/2025,1154,105,Maya Rossi,Regular,Referral,27,Water Bottle,Sports,1,12.4,15,10.54,0
+,1154,105,Maya Rossi,Regular,Referral,26,Yoga Mat,Sports,1,25.26,15,21.47,0
+11/14/2025,1155,189,Mateo Sullivan,Champion,Referral,24,Wool Scarf,apparel,1,24.6,0,24.6,
+09/12/2025,1156,225,Lila Cohen,Loyal,EMAIL,29,Jump Rope,Sports,1,6.3,,5.67,0
+09/08/2025,1157,171,Nina Novak,Regular,Referral,27,Water Bottle,Sports,2,12.4,5,23.56,0
+11/07/2025,1158,48,Riley Khan,Loyal,Email,32,,Toys,1,9.2,0,9.2,0
+11/07/2025,1158,48,Riley Khan,LOYAL,Email,21,Photo Frame,home ,2,9.8,0,19.6,0
+10/24/2025,1159,174,Zoe Nguyen,,Paid Search,30,Board Game,Toys,1,7.83,0,7.83,0
+10/01/2025,1160,60,Quinn Sullivan,Loyal,Social,33,Building Blocks,Toys,1,31.4,10,28.26,0
+10/01/2025,1160,60,Quinn Sullivan,Loyal,Social,24,Wool Scarf,apparel ,1,24.6,10,22.14,0
+08/28/2025,1161,36,Mateo Cohen,Regular,EMAIL,32,Toy Car,Toys,2,9.2,,15.64,
+10/09/2025,1162,150,Leo Brown,Loyal,Referral,18,Ceramic Mug,Home,3,35.7,0,107.1,0
+11/15/2025,1163,111,  Ethan  Sullivan,NEW,Referral,29,Jump Rope,Sports,1,,20,5.04,0
+11/15/2025,1163,111,Ethan Sullivan,New,Referral,14,Face Serum,Beauty,1,28.5,20,22.8,0
+15/11/2025,1163,111,Ethan Sullivan,New,Referral ,15,Body Lotion,Beauty,1,11.25,20,9.0,0
+10/12/2025,1164,57,Ivan Mendez,Champion,Direct,32,Toy Car,Toys,1,9.2,10,8.28,0
+11/16/2025,1165,171,Nina Novak,Regular,referral,10,,Beauty,1,5.32,,5.32,0
+28/10/2025,1166,129,Riley Cohen,Loyal,Referral ,10,Hand Cream,Beauty,1,5.32,10,,0
+11/20/2025,1167,81,Ethan Silva,Regular,Social,26,Yoga Mat,Sports,1,25.26,0,25.26,0
+09/14/2025,1168,132,Ivan Diaz,regular,Direct,14,Face Serum,Beauty,1,28.5,10,25.65,0
+14/09/2025,1168,132,  Ivan  Diaz,Regular,Direct,31,Puzzle Set,Toys,1,15.6,10,14.04,0
+14/09/2025,1168,132,Ivan Diaz,Regular,Direct,19,Wall Clock,Home,1,22.4,10,20.16,0
+09/17/2025,1169,141,Mateo Nguyen,Loyal,Paid Search,12,Sheet Mask,Beauty,1,20.39,10,18.35,0
+09/17/2025,1169,141,Mateo Nguyen,Loyal,Paid Search,11,Shampoo Bar,Beauty,1,,10,6.38,0
+10/31/2025,1170,66,Zoe Mendez,LOYAL,Direct,13,Lip Balm,Beauty,2,3.99,10,7.18,0
+10/17/2025,1171,90,Quinn Silva,Loyal,Referral,30,Board Game,Toys,1,7.83,0,7.83,0
+17/10/2025,1171,90,Quinn Silva,Loyal,referral,18,Ceramic Mug,Home,1,35.7,0,35.7,0
+10/20/2025,1172,159,Riley Novak,Regular,Direct,30,Board Game,toys,2,7.83,0,15.66,0
+09/29/2025,1173,138,Kai Khan,Champion, Email,11,Shampoo Bar,Beauty,1,7.09,10,6.38,0
+10/28/2025,1174,144,Riley Weber,Regular,Paid Search,21,Photo Frame,Home,1,9.8,0,9.8,0
+30/09/2025,1175,174,Zoe Nguyen,Regular,Referral ,14,Face Serum,Beauty,1,28.5,0,28.5,0
+09/30/2025,1175,174,Zoe Nguyen,Regular,Referral,25,Running Cap,Apparel,1,,0,14.9,0
+09/16/2025,1176,198,Zoe Okafor,,Paid Search,29,Jump Rope,Sports,2,6.3,0,12.6,0
+09/16/2025,1176,198,Zoe Okafor,Regular,PAID SEARCH,33,Building Blocks,toys,2,31.4,0,62.8,0
+09/16/2025,1176,198,Zoe Okafor,Regular,Paid Search,20,Table Lamp,Home,1,41.0,0,41.0,1
+09/16/2025,1176,198,Zoe Okafor,,Paid Search,29,Jump Rope,Sports,2,6.3,0,12.6,0
+11/09/2025,1177,165,Riley Mendez,Regular,Paid Search,32,Toy Car,Toys,1,9.2,15,7.82,0
+11/01/2025,1178,84,Noah Cohen,Regular,Social,25,Running Cap,Apparel,1,14.9,0,14.9,0
+11/15/2025,1179,108,Nina Patel,Champion,Direct,31,Puzzle Set,Toys,1,15.6,10,14.04,1
+11/15/2025,1179,108,Nina Patel,,Direct,16,Scented Candle,Home,,35.35,10,63.63,0
+09/20/2025,1180,75,Ivan Diaz,regular,Referral,11,Shampoo Bar,Beauty,1,7.09,10,6.38,0
+10/20/2025,1181,48,Riley Khan,Loyal,Paid Search,30,Board Game,Toys,1,7.83,0,7.83,0
+10/20/2025,1181,48,Riley Khan,Loyal,Paid Search ,13,Lip Balm,Beauty,1,3.99,0,3.99,0
+20/10/2025,1181,48,  Riley  Khan,Loyal,Paid Search,30,Board Game,Toys,2,7.83,0,15.66,0
+10/04/2025,1182,192,Ethan Diaz,Loyal,Referral,19,Wall Clock,Home,1,22.4,,22.4,0
+09/09/2025,1183,183,Noah Brown,Regular,Social,21,Photo Frame,Home,1,9.8,5,9.31,0
+11/05/2025,1184,120,Ethan Silva,Champion,Email,30,Board Game,Toys,1,7.83,10,7.05,0
+08/31/2025,1185,147,Maya Patel,Loyal,Referral,18,Ceramic Mug,Home,1,35.7,0,35.7,0
+08/31/2025,1185,147,Maya Patel,Loyal,Referral,16,Scented Candle,Home,1,35.35,0,35.35,0
+08/22/2025,1186,57,Ivan Mendez,Champion,referral,18,Ceramic Mug,Home,1,35.7,0,35.7,0
+10/23/2025,1187,66,Zoe Mendez,Loyal,Paid Search,23,Denim Jacket,apparel,1,88.0,10,79.2,0
+08/25/2025,1188,177,Leo Mendez,New,Direct,18,Ceramic Mug,Home,1,35.7,5,33.91,0
+08/25/2025,1188,177,Leo Mendez,New,Direct,18,Ceramic Mug,Home,1,35.7,5,33.91,0
+09/14/2025,1189,120,Ethan Silva,champion,Referral,20,Table Lamp,Home,1,41.0,0,41.0,1
+09/14/2025,1189,120,Ethan Silva,Champion,,26,Yoga Mat,Sports,1,25.26,0,25.26,0
+09/19/2025,1190,234,Omar Mendez,,Paid Search,33,Building Blocks,Toys,2,31.4,0,62.8,0
+10/01/2025,1191,207,Zoe Silva,Regular,Referral,14,Face Serum,beauty ,2,28.5,0,,0
+10/01/2025,1191,207,Zoe Silva,Regular,Referral,26,Yoga Mat,Sports,1,25.26,0,25.26,0
+10/10/2025,1192,171,Nina Novak,Regular,Email,23,Denim Jacket,Apparel,1,88.0,0,88.0,0
+09/18/2025,1193,204,Noah Rossi,New,Direct,16,Scented Candle,Home,1,35.35,0,35.35,0
+11/07/2025,1194,117,Omar Cohen,Regular,Referral,21,Photo Frame,Home,40,9.8,10,352.8,0
+11/07/2025,1195,213,Ivan Okafor,Regular,Referral,17,Throw Pillow,Home,1,17.82,0,17.82,0
+11/07/2025,1195,213,  Ivan  Okafor,Regular,Referral,21,Photo Frame,Home,1,9.8,0,9.8,0
+11/07/2025,1195,213,Ivan Okafor,Regular,Referral,17,Throw Pillow,Home,1,17.82,0,17.82,0
+10/04/2025,1196,105,Maya Rossi,Regular,Paid search,21,Photo Frame,Home,1,9.8,0,9.8,0
+30/08/2025,1197,42,  Mateo  Silva,Loyal,Referral,28,Resistance Band,Sports,1,8.75,5,8.31,0
+10/24/2025,1198,207,Zoe Silva,Regular,Direct,22,Cotton Shirt,Apparel,1,59.03,15,50.18,0
+11/16/2025,1199,132,Ivan Diaz,Regular,Referral,16,Scented Candle,Home,1,35.35,0,35.35,0
+11/16/2025,1199,132,Ivan Diaz,Regular,Referral,15,,Beauty,1,11.25,0,11.25,0
+28/08/2025,1200,225,Lila Cohen,Loyal,Social,26,Yoga Mat,Sports,3,25.26,0,75.78,
+11/06/2025,1201,213,Ivan Okafor,regular,Referral,17,Throw Pillow,Home,3,17.82,0,53.46,1
+09/22/2025,1202,42,Mateo Silva,Loyal,referral,18,Ceramic Mug,Home,2,35.7,0,71.4,0
+09/26/2025,1203,45,Ava Mendez,New,Social,15,Body Lotion,Beauty,2,11.25,10,20.25,0
+24/09/2025,1204,207,Zoe Silva,Regular,Social,30,Board Game,toys,2,7.83,20,12.53,0
+09/12/2025,1205,48,  Riley  Khan,Loyal,Paid Search,18,Ceramic Mug,Home,1,35.7,0,35.7,0
+09/12/2025,1205,48,Riley Khan,Loyal,Paid Search,12,Sheet Mask,Beauty,1,20.39,0,20.39,1
+09/12/2025,1205,48,Riley Khan,Loyal,Paid Search,14,Face Serum,Beauty,1,28.5,0,28.5,0
+08/18/2025,1206,75,Ivan Diaz,Regular,referral,31,Puzzle Set,Toys,2,15.6,15,26.52,
+17/10/2025,1207,222,Zoe Sullivan,Champion,Paid Search ,23,Denim Jacket,Apparel,1,88.0,10,79.2,0
+09/06/2025,1208,108,Nina Patel,Champion,Social,21,Photo Frame,Home,1,9.8,15,,0
+09/24/2025,1209,174,Zoe Nguyen,Regular,Direct,29,Jump Rope,Sports,1,6.3,0,6.3,0
+09/24/2025,1209,174,Zoe Nguyen,Regular,Direct,29,Jump Rope,Sports,1,6.3,0,6.3,0
+09/24/2025,1209,174,Zoe Nguyen,Regular,Direct,32,Toy Car,toys,1,9.2,0,9.2,0
+11/07/2025,1210,207,Zoe Silva,Regular,Direct,15,Body Lotion,Beauty,1,11.25,10,10.12,0
+11/07/2025,1210,207,Zoe Silva,regular,Direct,13,Lip Balm,beauty ,1,3.99,10,3.59,0
+11/07/2025,1210,207,Zoe Silva,Regular,Direct,29,Jump Rope,Sports,1,6.3,10,,0
+11/15/2025,1211,201,Kai Cohen,Champion,Referral,10,Hand Cream,Beauty,2,5.32,0,10.64,0
+15/11/2025,1211,201,Kai Cohen,Champion,Referral,28,Resistance Band,Sports,1,8.75,0,8.75,0
+09/25/2025,1212,99,  Ava  Rossi,Loyal,Social,29,Jump Rope,Sports,1,6.3,10,5.67,0
+10/21/2025,1213,216,Sofia Park,Regular,Referral,24,Wool Scarf,Apparel,1,24.6,5,23.37,0
+10/21/2025,1213,216,Sofia Park,Regular,Referral,22,Cotton Shirt,Apparel,3,59.03,5,168.24,1
+10/11/2025,1214,72,Lila Novak,Regular,Referral,32,Toy Car,Toys,1,9.2,15,7.82,0
+08/23/2025,1215,138,Kai Khan,Champion,Social,22,Cotton Shirt,Apparel,1,59.03,10,53.13,0
+08/23/2025,1215,138,Kai Khan,Champion,Social,30,Board Game,Toys,1,7.83,10,7.05,1
+08/23/2025,1215,138,Kai Khan,champion,Social,18,Ceramic Mug,Home,1,35.7,10,32.13,0
+09/22/2025,1216,144,Riley Weber,Regular,Referral,15,Body Lotion,Beauty,1,11.25,10,10.12,0
+10/31/2025,1217,171,Nina Novak,Regular,Paid Search,18,Ceramic Mug,Home,1,35.7,5,33.91,0
+10/10/2025,1218,237,Kai Okafor,Loyal,Email,16,Scented Candle,home ,1,35.35,0,35.35,0
+10/10/2025,1218,237,Kai Okafor,Loyal,Email,18,Ceramic Mug,Home,2,,0,71.4,0
+10/10/2025,1218,237,Kai Okafor,Loyal,Email,28,Resistance Band,Sports,2,8.75,0,17.5,
+10/30/2025,1219,204,Noah Rossi,,Social,22,Cotton Shirt,apparel,1,59.03,5,56.08,0
+10/30/2025,1219,204,Noah Rossi,New,Social,15,Body Lotion,Beauty,2,,,21.38,0
+10/30/2025,1220,144,Riley Weber,Regular,Direct,21,Photo Frame,Home,1,9.8,0,9.8,
+10/30/2025,1220,144,Riley Weber,Regular,Direct,17,Throw Pillow,Home,2,17.82,,35.64,0
+09/18/2025,1221,87,Ava Patel,New,Paid Search,10,Hand Cream,Beauty,2,5.32,15,9.04,0
+13/10/2025,1222,54,Omar Cohen,Regular,Email,17,Throw Pillow,Home,1,17.82,15,15.15,0
+10/13/2025,1222,54,Omar Cohen,Regular,email,25,Running Cap,Apparel,2,14.9,15,25.33,0
+,1222,54,Omar Cohen,Regular,Email,26,Yoga Mat,Sports,1,25.26,15,21.47,0
+09/01/2025,1223,93,Riley Brown,Loyal,Referral,31,Puzzle Set,Toys,1,15.6,10,14.04,0
+10/31/2025,1224,33,Zoe Nguyen,New,Email,13,Lip Balm,Beauty,2,3.99,,7.98,0
+10/09/2025,1225,207,Zoe Silva,Regular,Referral,30,Board Game,Toys,1,7.83,0,7.83,0
+09/27/2025,1226,147,Maya Patel,Loyal,Referral,19,Wall Clock,Home,1,22.4,5,21.28,0
+09/27/2025,1226,147,Maya Patel,Loyal,Referral,13,Lip Balm,Beauty,1,3.99,5,3.79,0
+09/27/2025,1226,147,Maya Patel,Loyal,Referral,13,Lip Balm,Beauty,1,3.99,5,3.79,0
+10/03/2025,1227,216,Sofia Park,Regular,social,18,Ceramic Mug,Home,1,35.7,0,35.7,0
+11/03/2025,1228,234,Omar Mendez,New,Referral,30,Board Game,Toys,1,7.83,15,6.66,0
+11/16/2025,1229,78,Quinn Brown,New,Referral,26,Yoga Mat,sports ,1,25.26,0,25.26,0
+11/16/2025,1229,78,Quinn Brown,New,Referral ,31,Puzzle Set,Toys,2,15.6,0,31.2,0
+08/25/2025,1230,123,Kai Patel,Loyal,Referral ,22,Cotton Shirt,Apparel,1,59.03,5,56.08,1
+08/25/2025,1230,123,  Kai  Patel,Loyal,Referral,12,Sheet Mask,Beauty,1,2039.0,5,19.37,0
+08/25/2025,1230,123,Kai Patel,Loyal,Referral,21,Photo Frame,Home,1,9.8,5,9.31,0
+11/02/2025,1231,153,Kai Brown,NEW,Email,14,Face Serum,Beauty,2,28.5,10,51.3,0
+10/17/2025,1232,33,Zoe Nguyen,New,Paid Search,32,Toy Car,Toys,1,9.2,15,7.82,0
+10/17/2025,1232,33,Zoe Nguyen,New,Paid Search,31,Puzzle Set,Toys,1,15.6,15,13.26,1
+09/02/2025,1233,156,Nina Cohen,regular,paid search,12,Sheet Mask,Beauty,1,20.39,0,20.39,0
+09/02/2025,1233,156,Nina Cohen,Regular,Paid Search,21,Photo Frame,Home,1,9.8,0,9.8,0
+09/10/2025,1234,186,Quinn Rossi,Loyal,Paid Search,15,Body Lotion,Beauty,2,11.25,10,20.25,0
+25/09/2025,1235,216,Sofia Park,Regular,Referral,23,Denim Jacket,Apparel,2,88.0,0,176.0,1
