@@ -24,6 +24,8 @@ FLAG_CHANGE_PCT = 1.0
 
 _PREFIXES = [
     ("standardize_values_", "Replaced values"),
+    ("find_replace_", "Find & replace"),
+    ("text_case_", "Text case changed"),
     ("merge_case_", "Merged spellings"),
     ("standardize_", "Tidied text"),
     ("missing_", "Missing values"),
@@ -111,8 +113,23 @@ def _describe(change_key, detail):
     if "mappings_applied" in detail:
         return f"{detail['mappings_applied']} value replacements applied."
 
+    if "replacements" in detail:
+        return (
+            f"{detail['replacements']} cells changed by "
+            f"{detail.get('rules', 1)} find-and-replace rule(s)."
+        )
+
+    if "case" in detail:
+        return f"Text changed to {detail['case']} case ({detail.get('values_changed', 0)} values)."
+
     if "converted_to" in detail:
-        return f"Converted to {detail['converted_to']}."
+        text = f"Converted to {detail['converted_to']}."
+        if detail.get("became_empty"):
+            text += (
+                f" {detail['became_empty']} values could not be read as "
+                f"{detail['converted_to']} and became empty."
+            )
+        return text
 
     if "clipped" in detail:
         return (
@@ -150,6 +167,42 @@ def _change_log(original, cleaned, changes):
         if key == "duplicates_removed":
             continue
 
+        if key == "drop_columns":
+            names = detail.get("dropped", [])
+            log.append({
+                "column": ", ".join(map(str, names)),
+                "action": "Columns removed",
+                "detail": f"Removed {len(names)} column(s) you did not need.",
+                "cells_changed": 0,
+                "examples": [],
+            })
+            continue
+
+        if key == "rename_columns":
+            renamed = detail.get("renamed", {})
+            log.append({
+                "column": ", ".join(map(str, renamed)),
+                "action": "Columns renamed",
+                "detail": "; ".join(f"{old} became {new}" for old, new in renamed.items()),
+                "cells_changed": 0,
+                "examples": [],
+            })
+            continue
+
+        if key.startswith("drop_rows_") and isinstance(detail, dict):
+            column = detail.get("column", "")
+            log.append({
+                "column": column,
+                "action": "Rows removed",
+                "detail": f"Removed {detail.get('rows_removed', 0)} rows where {detail.get('rule', '')}.",
+                "cells_changed": 0,
+                "examples": [
+                    {"row": e["row"], "before": f"{column} = {e['value']}", "after": "row removed"}
+                    for e in detail.get("examples", [])
+                ],
+            })
+            continue
+
         for prefix, action in _PREFIXES:
             if key.startswith(prefix):
                 column = key[len(prefix):]
@@ -170,11 +223,13 @@ def _change_log(original, cleaned, changes):
     return log
 
 
-def _total_checks(original, cleaned):
+def _total_checks(original, cleaned, renames=None):
     checks = []
+    renames = renames or {}
 
     for column in original.columns:
-        if column not in cleaned.columns:
+        after_name = renames.get(column, column)
+        if after_name not in cleaned.columns:
             continue
         if not pd.api.types.is_numeric_dtype(original[column]):
             continue
@@ -184,7 +239,7 @@ def _total_checks(original, cleaned):
             continue
 
         before = pd.to_numeric(original[column], errors="coerce")
-        after = pd.to_numeric(cleaned[column], errors="coerce")
+        after = pd.to_numeric(cleaned[after_name], errors="coerce")
 
         if before.notna().sum() == 0:
             continue
@@ -198,7 +253,7 @@ def _total_checks(original, cleaned):
         flagged = abs(change_pct) >= FLAG_CHANGE_PCT
 
         checks.append({
-            "column": str(column),
+            "column": str(column) if after_name == column else f"{column} (now {after_name})",
             "before_total": round(before_sum, 2),
             "after_total": round(after_sum, 2),
             "change_pct": round(change_pct, 2),
@@ -317,7 +372,9 @@ def build_cleaning_report(original, cleaned, changes, operations=None):
                 "before": int(original.duplicated().sum()),
                 "after": int(cleaned.duplicated().sum()),
             },
-            "column_checks": _total_checks(original, cleaned),
+            "column_checks": _total_checks(
+                original, cleaned, (operations or {}).get("rename_columns")
+            ),
             "change_log": _change_log(original, cleaned, changes),
             "assumptions": assumptions,
             "applied_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

@@ -22,6 +22,7 @@ from app.data_analysis import (
     explain_change,
 )
 from app.trust import build_cleaning_report
+from app.codegen import generate_cleaning_code
 from app.dashboard_builder import build_dashboard_data
 from app.visualization import (
     build_visualization_data,
@@ -90,6 +91,9 @@ cleaned_datasets = {}
 
 # Cleaning reconciliation reports (what changed, before/after totals)
 cleaning_reports = {}
+
+# Original file names (used in the exported Python script)
+dataset_files = {}
 
 # Caches so repeated questions and page loads are fast
 context_cache = {}     # (dataset_id, "original"|"cleaned") -> AI summary JSON
@@ -177,6 +181,7 @@ def register_dataset(df, filename, load_info):
 
     # Store a copy of the uploaded dataset
     datasets[dataset_id] = df.copy(deep=True)
+    dataset_files[dataset_id] = filename
 
     # Generate dataset profile
     profile = profile_dataframe(df)
@@ -512,7 +517,7 @@ def download_cleaned_csv(
 
 
 # --------------------------------------------------
-# 10. Cleaning report (what changed, before/after checks)
+# 10. Cleaning report, Python export and reset
 # --------------------------------------------------
 
 @app.get("/api/v1/datasets/{dataset_id}/clean/report")
@@ -530,6 +535,48 @@ def get_cleaning_report(dataset_id: str):
         return {"available": False}
 
     return {"available": True, **report}
+
+
+@app.post("/api/v1/datasets/{dataset_id}/clean/code")
+def export_cleaning_code(
+    dataset_id: str,
+    operations: dict = Body(...),
+):
+    """Python (pandas) script that repeats the chosen cleaning steps."""
+
+    if dataset_id not in datasets:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again.",
+        )
+
+    try:
+        code = generate_cleaning_code(
+            datasets[dataset_id],
+            operations,
+            source_name=dataset_files.get(dataset_id, "your_file.csv"),
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error))
+
+    return {"code": code}
+
+
+@app.delete("/api/v1/datasets/{dataset_id}/clean")
+def reset_cleaning(dataset_id: str):
+    """Undo an applied cleaning. The uploaded original is never touched."""
+
+    if dataset_id not in datasets:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found. Please upload the CSV again.",
+        )
+
+    cleaned_datasets.pop(dataset_id, None)
+    cleaning_reports.pop(dataset_id, None)
+    invalidate_caches(dataset_id)
+
+    return {"status": "success", "message": "Cleaning removed. Using the original data."}
 
 
 # --------------------------------------------------

@@ -1,11 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   WandSparkles,
   Download,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
+  Plus,
+  X,
+  Save,
+  Upload,
+  Code2,
+  Undo2,
+  Copy,
 } from "lucide-react";
+import "./CleaningSteps.css";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -99,6 +107,106 @@ const getInconsistentColumns = (qualityReport) =>
       example: (issue.examples?.[0] || []).join("  /  "),
     }));
 
+/* ---------- custom steps ---------- */
+
+const STEP_TYPES = [
+  { value: "rename", label: "Rename a column" },
+  { value: "drop_column", label: "Remove a column" },
+  { value: "find_replace", label: "Find and replace text" },
+  { value: "text_case", label: "Change capital letters" },
+  { value: "drop_rows", label: "Remove rows that match a rule" },
+  { value: "to_number", label: "Turn text into numbers" },
+];
+
+const ROW_OPERATORS = [
+  { value: "<", label: "is less than" },
+  { value: "<=", label: "is at most" },
+  { value: ">", label: "is more than" },
+  { value: ">=", label: "is at least" },
+  { value: "==", label: "is equal to" },
+  { value: "!=", label: "is not equal to" },
+  { value: "contains", label: "contains" },
+  { value: "is_null", label: "is empty" },
+  { value: "not_null", label: "is not empty" },
+];
+
+const NO_VALUE_OPERATORS = ["is_null", "not_null"];
+
+const STRATEGY_LABELS = {
+  median: "fill with the median",
+  mean: "fill with the average",
+  mode: "fill with the most common value",
+  zero: "fill with 0",
+  unknown: "label as (Unknown)",
+  drop_rows: "remove those rows",
+};
+
+const EMPTY_DRAFT = {
+  column: "",
+  newName: "",
+  find: "",
+  replace: "",
+  match: "exact",
+  caseSensitive: false,
+  mode: "lower",
+  op: "<",
+  value: "",
+};
+
+const describeStep = (step) => {
+  switch (step.type) {
+    case "rename":
+      return `Rename "${step.column}" to "${step.newName}"`;
+    case "drop_column":
+      return `Remove the column "${step.column}"`;
+    case "find_replace":
+      return `In "${step.column}", ${
+        step.match === "contains" ? "replace text containing" : "replace"
+      } "${step.find}" with ${step.replace === "" ? "an empty cell" : `"${step.replace}"`}`;
+    case "text_case":
+      return `Write "${step.column}" in ${step.mode} case`;
+    case "drop_rows": {
+      const label = ROW_OPERATORS.find((o) => o.value === step.op)?.label || step.op;
+      return NO_VALUE_OPERATORS.includes(step.op)
+        ? `Remove rows where "${step.column}" ${label}`
+        : `Remove rows where "${step.column}" ${label} ${step.value}`;
+    }
+    case "to_number":
+      return `Turn "${step.column}" into numbers (removes $, commas and spaces)`;
+    default:
+      return step.type;
+  }
+};
+
+const formatChange = (value) => {
+  if (value === null || value === undefined) return "-";
+  if (typeof value !== "object") return String(value);
+
+  return Object.entries(value)
+    .filter(([key]) => key !== "examples")
+    .map(([key, val]) => {
+      const text = typeof val === "object" && val !== null ? JSON.stringify(val) : val;
+      return `${key.replaceAll("_", " ")}: ${text}`;
+    })
+    .join(" · ");
+};
+
+const downloadText = (text, filename, type) => {
+  const blob = new Blob([text], { type });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+const ALLOWED_STRATEGIES = [
+  "median", "mean", "mode", "zero", "unknown", "skip", "drop_rows",
+];
+
 function CleaningSection({ datasetId, profile, qualityReport }) {
   const columns = profile?.columns || {};
   const statistics = profile?.numerical_statistics || {};
@@ -143,6 +251,20 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
     inconsistentColumns.map((item) => item.column)
   );
 
+  const [datesOn, setDatesOn] = useState(true);
+  const [customSteps, setCustomSteps] = useState([]);
+  const [draftType, setDraftType] = useState("");
+  const [draft, setDraft] = useState(EMPTY_DRAFT);
+  const [draftError, setDraftError] = useState("");
+
+  const [hasApplied, setHasApplied] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [code, setCode] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const recipeInputRef = useRef(null);
+  const stepCounter = useRef(0);
+
   const [preview, setPreview] = useState(null);
   const [previewPayload, setPreviewPayload] = useState(null);
 
@@ -160,6 +282,11 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
     setSelectedOutliers([]);
     setSelectedCase(inconsistentColumns.map((item) => item.column));
     setRemoveDuplicates(true);
+    setDatesOn(true);
+    setCustomSteps([]);
+    setDraftType("");
+    setNotice("");
+    setCode("");
 
     setPreview(null);
     setPreviewPayload(null);
@@ -182,13 +309,52 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
           : { strategy: settings.strategy };
     });
 
-    return {
+    const payload = {
       remove_duplicates: removeDuplicates,
       merge_case_columns: selectedCase,
       missing_values: missingValues,
-      date_columns: dateColumns,
+      date_columns: datesOn ? dateColumns : [],
       outlier_columns: selectedOutliers,
     };
+
+    const renames = {};
+    const drops = [];
+    const replaces = [];
+    const cases = {};
+    const rules = [];
+    const types = {};
+
+    customSteps.forEach((step) => {
+      if (step.type === "rename") renames[step.column] = step.newName.trim();
+      if (step.type === "drop_column") drops.push(step.column);
+      if (step.type === "find_replace") {
+        replaces.push({
+          column: step.column,
+          find: step.find,
+          replace: step.replace,
+          match: step.match,
+          case_sensitive: step.caseSensitive,
+        });
+      }
+      if (step.type === "text_case") cases[step.column] = step.mode;
+      if (step.type === "drop_rows") {
+        rules.push({
+          column: step.column,
+          op: step.op,
+          ...(NO_VALUE_OPERATORS.includes(step.op) ? {} : { value: step.value }),
+        });
+      }
+      if (step.type === "to_number") types[step.column] = "float";
+    });
+
+    if (Object.keys(renames).length) payload.rename_columns = renames;
+    if (drops.length) payload.drop_columns = drops;
+    if (replaces.length) payload.find_replace = replaces;
+    if (Object.keys(cases).length) payload.text_case = cases;
+    if (rules.length) payload.drop_rows = rules;
+    if (Object.keys(types).length) payload.type_conversions = types;
+
+    return payload;
   };
 
   const resetCleaningStatus = () => {
@@ -242,6 +408,291 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
 
     resetCleaningStatus();
   };
+
+  /* ----- custom steps ----- */
+
+  const allColumnNames = Object.keys(columns);
+  const textColumnNames = allColumnNames.filter(
+    (name) => !isNumericColumn(columns[name])
+  );
+
+  const columnChoices = (type) =>
+    type === "find_replace" || type === "text_case" || type === "to_number"
+      ? textColumnNames
+      : allColumnNames;
+
+  const startDraft = (type) => {
+    setDraftType(type);
+    setDraft({ ...EMPTY_DRAFT, column: columnChoices(type)[0] || "" });
+    setDraftError("");
+  };
+
+  const updateDraft = (patch) => setDraft((current) => ({ ...current, ...patch }));
+
+  const validateDraft = () => {
+    if (!draft.column) return "Choose a column.";
+
+    if (draftType === "rename") {
+      const name = draft.newName.trim();
+      if (!name) return "Type the new name.";
+
+      const takenByOthers = allColumnNames.some(
+        (c) => c !== draft.column && c === name
+      );
+      const takenByStep = customSteps.some(
+        (st) => st.type === "rename" && st.column !== draft.column && st.newName.trim() === name
+      );
+      if (takenByOthers || takenByStep) return `A column called "${name}" already exists.`;
+    }
+
+    if (draftType === "find_replace" && draft.find === "") {
+      return "Type the text to look for.";
+    }
+
+    if (
+      draftType === "drop_rows" &&
+      !NO_VALUE_OPERATORS.includes(draft.op) &&
+      String(draft.value).trim() === ""
+    ) {
+      return "Type a value for the rule.";
+    }
+
+    return "";
+  };
+
+  const addStep = () => {
+    const problem = validateDraft();
+    if (problem) {
+      setDraftError(problem);
+      return;
+    }
+
+    stepCounter.current += 1;
+
+    setCustomSteps((current) => {
+      // one rename / case rule per column: the newest replaces the older one
+      const kept = current.filter(
+        (st) =>
+          !(
+            st.column === draft.column &&
+            st.type === draftType &&
+            ["rename", "text_case", "drop_column", "to_number"].includes(st.type)
+          )
+      );
+      return [...kept, { id: `step-${stepCounter.current}`, type: draftType, ...draft }];
+    });
+
+    setDraftType("");
+    setDraftError("");
+    resetCleaningStatus();
+  };
+
+  const removeStep = (id) => {
+    setCustomSteps((current) => current.filter((st) => st.id !== id));
+    resetCleaningStatus();
+  };
+
+  /* ----- recipe (save / load) ----- */
+
+  const handleSaveRecipe = () => {
+    const recipe = {
+      type: "datalens-recipe",
+      version: 1,
+      created: new Date().toISOString(),
+      operations: buildPayload(),
+    };
+
+    downloadText(
+      JSON.stringify(recipe, null, 2),
+      "datalens-recipe.json",
+      "application/json"
+    );
+  };
+
+  const applyRecipe = (operations) => {
+    const known = new Set(allColumnNames);
+    const skipped = new Set();
+
+    const keep = (name) => {
+      if (known.has(name)) return true;
+      skipped.add(name);
+      return false;
+    };
+
+    setRemoveDuplicates(Boolean(operations.remove_duplicates));
+    setSelectedCase((operations.merge_case_columns || []).filter(keep));
+    setSelectedOutliers((operations.outlier_columns || []).filter(keep));
+    setDatesOn((operations.date_columns || []).length > 0);
+
+    const missing = {};
+    Object.entries(columns).forEach(([name, details]) => {
+      if (details.missing_count > 0) {
+        missing[name] = { enabled: false, strategy: getDefaultStrategy(name, details) };
+      }
+    });
+
+    Object.entries(operations.missing_values || {}).forEach(([name, config]) => {
+      if (!keep(name) || !missing[name]) return;
+
+      let strategy = config?.strategy;
+      if (strategy === "constant" && Number(config.value) === 0) strategy = "zero";
+      if (!ALLOWED_STRATEGIES.includes(strategy)) {
+        strategy = getDefaultStrategy(name, columns[name]);
+      }
+
+      missing[name] = { enabled: true, strategy };
+    });
+
+    setSelectedMissing(missing);
+
+    const steps = [];
+    const add = (step) => {
+      stepCounter.current += 1;
+      steps.push({ ...EMPTY_DRAFT, id: `step-${stepCounter.current}`, ...step });
+    };
+
+    Object.entries(operations.rename_columns || {}).forEach(([column, newName]) => {
+      if (keep(column)) add({ type: "rename", column, newName });
+    });
+    (operations.drop_columns || []).forEach((column) => {
+      if (keep(column)) add({ type: "drop_column", column });
+    });
+    (operations.find_replace || []).forEach((rule) => {
+      if (keep(rule.column)) {
+        add({
+          type: "find_replace",
+          column: rule.column,
+          find: rule.find ?? "",
+          replace: rule.replace ?? "",
+          match: rule.match || "exact",
+          caseSensitive: Boolean(rule.case_sensitive),
+        });
+      }
+    });
+    Object.entries(operations.text_case || {}).forEach(([column, mode]) => {
+      if (keep(column)) add({ type: "text_case", column, mode });
+    });
+    (operations.drop_rows || []).forEach((rule) => {
+      if (keep(rule.column)) {
+        add({ type: "drop_rows", column: rule.column, op: rule.op, value: rule.value ?? "" });
+      }
+    });
+    Object.entries(operations.type_conversions || {}).forEach(([column, target]) => {
+      if (target === "float" && keep(column)) add({ type: "to_number", column });
+    });
+
+    setCustomSteps(steps);
+    resetCleaningStatus();
+
+    setNotice(
+      skipped.size > 0
+        ? `Recipe loaded. ${skipped.size} column(s) from the recipe are not in this file and were skipped: ${[...skipped].join(", ")}.`
+        : "Recipe loaded. Review the steps on the right, then preview the changes."
+    );
+  };
+
+  const handleRecipeFile = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      try {
+        const recipe = JSON.parse(String(reader.result));
+
+        if (recipe?.type !== "datalens-recipe" || typeof recipe.operations !== "object") {
+          throw new Error("not a recipe");
+        }
+
+        applyRecipe(recipe.operations);
+      } catch {
+        setError("This file is not a DataLens recipe.");
+      }
+    };
+
+    reader.readAsText(file);
+  };
+
+  /* ----- python export and start over ----- */
+
+  const handleShowCode = async () => {
+    setCodeLoading(true);
+    setError("");
+    setCopied(false);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/v1/datasets/${datasetId}/clean/code`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildPayload()),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data.detail === "string" ? data.detail : "Could not create the code."
+        );
+      }
+
+      setCode(data.code);
+    } catch (err) {
+      setError(err.message || "Could not create the code.");
+    } finally {
+      setCodeLoading(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+    } catch {
+      setError("Could not copy. Use Download instead.");
+    }
+  };
+
+  const handleStartOver = async () => {
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/datasets/${datasetId}/clean`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) throw new Error("Could not remove the cleaning.");
+
+      setHasApplied(false);
+      setCleanedReady(false);
+      setPreview(null);
+      setPreviewPayload(null);
+      setSuccess(
+        "Cleaning removed. Charts and AI questions now use your original data."
+      );
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    }
+  };
+
+  // Is a cleaned version already saved on the server?
+  useEffect(() => {
+    let alive = true;
+
+    fetch(`${API_URL}/api/v1/datasets/${datasetId}/clean/report`)
+      .then((response) => response.json())
+      .then((data) => alive && setHasApplied(Boolean(data.available)))
+      .catch(() => {});
+
+    return () => {
+      alive = false;
+    };
+  }, [datasetId]);
 
   const handlePreview = async () => {
     setLoading(true);
@@ -318,6 +769,7 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
       }
 
       setCleanedReady(true);
+      setHasApplied(true);
 
       setSuccess(
         "Cleaning applied successfully. Your cleaned dataset is ready for charts and AI questions."
@@ -388,6 +840,58 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
     }
   };
 
+  const stepList = [];
+
+  if (removeDuplicates) {
+    stepList.push({
+      key: "dups",
+      text: "Remove duplicate rows",
+      remove: () => setRemoveDuplicates(false),
+    });
+  }
+
+  selectedCase.forEach((name) =>
+    stepList.push({
+      key: `case-${name}`,
+      text: `Make spellings in "${name}" consistent`,
+      remove: () => handleCaseToggle(name),
+    })
+  );
+
+  if (datesOn && dateColumns.length > 0) {
+    stepList.push({
+      key: "dates",
+      text: `Write dates in ${dateColumns.join(", ")} as YYYY-MM-DD`,
+      remove: () => setDatesOn(false),
+    });
+  }
+
+  Object.entries(selectedMissing).forEach(([name, settings]) => {
+    if (settings.enabled && settings.strategy !== "skip") {
+      stepList.push({
+        key: `miss-${name}`,
+        text: `Empty cells in "${name}": ${STRATEGY_LABELS[settings.strategy] || settings.strategy}`,
+        remove: () => handleMissingToggle(name),
+      });
+    }
+  });
+
+  selectedOutliers.forEach((name) =>
+    stepList.push({
+      key: `out-${name}`,
+      text: `Cap extreme values in "${name}"`,
+      remove: () => handleOutlierToggle(name),
+    })
+  );
+
+  customSteps.forEach((step) =>
+    stepList.push({
+      key: step.id,
+      text: describeStep(step),
+      remove: () => removeStep(step.id),
+    })
+  );
+
   const renderStrategyOptions = (name, details) => {
     if (isReturnColumn(name) || isIdentifierColumn(name, details)) {
       return <option value="skip">Keep missing values</option>;
@@ -445,6 +949,7 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
       </div>
 
       <div className="cleaning-options">
+        <div className="cstep-stack">
         <div className="cleaning-card">
           <div className="cleaning-card-heading">
             <div>
@@ -509,6 +1014,18 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
                 {mixedDateColumns.length > 0 &&
                   ` ${mixedDateColumns.join(", ")} mixes two date styles. The cleaning report shows which dates were ambiguous.`}
               </p>
+
+              <label className="cleaning-checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={datesOn}
+                  onChange={(e) => {
+                    setDatesOn(e.target.checked);
+                    resetCleaningStatus();
+                  }}
+                />
+                <span>Convert these dates</span>
+              </label>
             </>
           )}
 
@@ -569,6 +1086,173 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
           )}
         </div>
 
+        <div className="cleaning-card">
+          <h3>Add your own step</h3>
+          <p>
+            Rename or remove columns, fix text, or remove rows that break a
+            rule. Every step can be undone from the list on the right.
+          </p>
+
+          <select
+            className="cstep-select"
+            value={draftType}
+            onChange={(e) =>
+              e.target.value ? startDraft(e.target.value) : setDraftType("")
+            }
+          >
+            <option value="">Choose a step...</option>
+            {STEP_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+
+          {draftType && (
+            <div className="cstep-form">
+              <label>
+                <span>Column</span>
+                <select
+                  value={draft.column}
+                  onChange={(e) => updateDraft({ column: e.target.value })}
+                >
+                  {columnChoices(draftType).map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {draftType === "rename" && (
+                <label>
+                  <span>New name</span>
+                  <input
+                    type="text"
+                    value={draft.newName}
+                    onChange={(e) => updateDraft({ newName: e.target.value })}
+                    placeholder="For example: Revenue"
+                  />
+                </label>
+              )}
+
+              {draftType === "find_replace" && (
+                <>
+                  <label>
+                    <span>Look for</span>
+                    <select
+                      value={draft.match}
+                      onChange={(e) => updateDraft({ match: e.target.value })}
+                    >
+                      <option value="exact">A cell that is exactly...</option>
+                      <option value="contains">Text that contains...</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Text</span>
+                    <input
+                      type="text"
+                      value={draft.find}
+                      onChange={(e) => updateDraft({ find: e.target.value })}
+                      placeholder='For example: N/A'
+                    />
+                  </label>
+                  <label>
+                    <span>Replace with</span>
+                    <input
+                      type="text"
+                      value={draft.replace}
+                      onChange={(e) => updateDraft({ replace: e.target.value })}
+                      placeholder="Leave empty to make the cell blank"
+                    />
+                  </label>
+                  <label className="cstep-check">
+                    <input
+                      type="checkbox"
+                      checked={draft.caseSensitive}
+                      onChange={(e) => updateDraft({ caseSensitive: e.target.checked })}
+                    />
+                    <span>Match capital letters exactly</span>
+                  </label>
+                </>
+              )}
+
+              {draftType === "text_case" && (
+                <label>
+                  <span>Write it in</span>
+                  <select
+                    value={draft.mode}
+                    onChange={(e) => updateDraft({ mode: e.target.value })}
+                  >
+                    <option value="lower">lower case (anna lee)</option>
+                    <option value="upper">UPPER CASE (ANNA LEE)</option>
+                    <option value="title">Title Case (Anna Lee)</option>
+                  </select>
+                </label>
+              )}
+
+              {draftType === "drop_rows" && (
+                <>
+                  <label>
+                    <span>Remove rows where the value</span>
+                    <select
+                      value={draft.op}
+                      onChange={(e) => updateDraft({ op: e.target.value })}
+                    >
+                      {ROW_OPERATORS.map((op) => (
+                        <option key={op.value} value={op.value}>
+                          {op.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {!NO_VALUE_OPERATORS.includes(draft.op) && (
+                    <label>
+                      <span>Value</span>
+                      <input
+                        type="text"
+                        value={draft.value}
+                        onChange={(e) => updateDraft({ value: e.target.value })}
+                        placeholder="For example: 0 or 2025-01-01"
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+
+              {draftType === "drop_column" && (
+                <p className="cstep-hint">
+                  The column is removed at the end, so your other steps can
+                  still use it.
+                </p>
+              )}
+
+              {draftType === "to_number" && (
+                <p className="cstep-hint">
+                  Values like $1,200 or 35 % become numbers. Anything that is
+                  not a number becomes an empty cell.
+                </p>
+              )}
+
+              {draftError && <p className="cstep-error">{draftError}</p>}
+
+              <div className="cstep-form-actions">
+                <button type="button" className="cstep-add" onClick={addStep}>
+                  <Plus size={15} /> Add step
+                </button>
+                <button
+                  type="button"
+                  className="cstep-cancel"
+                  onClick={() => setDraftType("")}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
+
         <div className="cleaning-action-card">
           <div className="cleaning-action-icon">
             <WandSparkles size={24} />
@@ -602,8 +1286,99 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
           <p className="cleaning-note">
             Previewing does not overwrite your original dataset.
           </p>
+
+          <div className="cstep-panel">
+            <div className="cstep-panel-head">
+              <h4>Your cleaning steps</h4>
+              <span>{stepList.length}</span>
+            </div>
+
+            {stepList.length > 0 ? (
+              <ul className="cstep-list">
+                {stepList.map((item) => (
+                  <li key={item.key}>
+                    <span>{item.text}</span>
+                    <button
+                      type="button"
+                      title="Undo this step"
+                      aria-label="Undo this step"
+                      onClick={item.remove}
+                    >
+                      <X size={14} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="cstep-empty">No steps selected, so nothing will change.</p>
+            )}
+
+            <div className="cstep-tools">
+              <button type="button" onClick={handleSaveRecipe}>
+                <Save size={14} /> Save recipe
+              </button>
+              <button type="button" onClick={() => recipeInputRef.current?.click()}>
+                <Upload size={14} /> Load recipe
+              </button>
+              <button type="button" onClick={handleShowCode} disabled={codeLoading}>
+                <Code2 size={14} /> {codeLoading ? "Creating..." : "Python code"}
+              </button>
+              {hasApplied && (
+                <button type="button" className="cstep-danger" onClick={handleStartOver}>
+                  <Undo2 size={14} /> Start over
+                </button>
+              )}
+              <input
+                ref={recipeInputRef}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                onChange={handleRecipeFile}
+              />
+            </div>
+
+            <p className="cstep-recipe-note">
+              A recipe saves your steps so you can run them on next month's file.
+            </p>
+          </div>
         </div>
       </div>
+
+      {notice && (
+        <div className="cleaning-message cstep-notice">
+          <CheckCircle2 size={18} />
+          {notice}
+        </div>
+      )}
+
+      {code && (
+        <div className="cstep-code">
+          <div className="cstep-code-head">
+            <div>
+              <h4>Your cleaning as Python code</h4>
+              <p>
+                Run it yourself with pandas and you get the same result as
+                this page.
+              </p>
+            </div>
+            <div className="cstep-code-actions">
+              <button type="button" onClick={handleCopyCode}>
+                <Copy size={14} /> {copied ? "Copied" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadText(code, "datalens_cleaning.py", "text/x-python")}
+              >
+                <Download size={14} /> Download .py
+              </button>
+              <button type="button" onClick={() => setCode("")}>
+                <X size={14} /> Close
+              </button>
+            </div>
+          </div>
+          <pre>{code}</pre>
+        </div>
+      )}
 
       {error && (
         <div className="cleaning-message error-message">
@@ -659,13 +1434,7 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
                 {Object.entries(preview.changes).map(([name, value]) => (
                   <div className="detail-row" key={name}>
                     <span>{name.replaceAll("_", " ")}</span>
-                    <strong>
-                      {typeof value === "object" && value !== null
-                        ? Object.entries(value)
-                            .map(([key, val]) => `${key}: ${val}`)
-                            .join(" · ")
-                        : String(value)}
-                    </strong>
+                    <strong>{formatChange(value)}</strong>
                   </div>
                 ))}
               </div>
