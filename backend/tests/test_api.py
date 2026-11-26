@@ -117,3 +117,46 @@ def test_start_over_removes_cleaning(client, sample):
     assert client.delete(f"/api/v1/datasets/{did}/clean").status_code == 200
     assert client.get(f"/api/v1/datasets/{did}/clean/report").json() == {"available": False}
     assert client.get(f"/api/v1/datasets/{did}/dashboard").json()["using_cleaned"] is False
+
+
+def test_export_excel_and_csv(client, sample):
+    did = sample["dataset_id"]
+    client.post(f"/api/v1/datasets/{did}/clean/apply", json=OPS)
+
+    excel = client.get(f"/api/v1/datasets/{did}/export?format=xlsx")
+    assert excel.status_code == 200 and "spreadsheetml" in excel.headers["content-type"]
+    assert "-cleaned.xlsx" in excel.headers["content-disposition"]
+    from openpyxl import load_workbook
+    book = load_workbook(io.BytesIO(excel.content))
+    assert "Cleaning log" in book.sheetnames
+
+    csv = client.get(f"/api/v1/datasets/{did}/export?format=csv")
+    assert csv.status_code == 200 and csv.content.startswith(b"\xef\xbb\xbf")
+    assert len(pd.read_csv(io.BytesIO(csv.content), encoding="utf-8-sig")) == book["Cleaned data"].max_row - 1
+
+
+def test_export_rejects_unknown_format_and_dataset(client, sample):
+    assert client.get(f"/api/v1/datasets/{sample['dataset_id']}/export?format=pdf").status_code == 400
+    assert client.get("/api/v1/datasets/nope/export").status_code == 404
+
+
+def test_pdf_report_endpoint(client, sample):
+    did = sample["dataset_id"]
+    client.post(f"/api/v1/datasets/{did}/clean/apply", json=OPS)
+    response = client.get(f"/api/v1/datasets/{did}/report/pdf")
+    assert response.status_code == 200 and response.headers["content-type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    assert "datalens-report.pdf" in response.headers["content-disposition"]
+
+    from pypdf import PdfReader
+    text = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(response.content)).pages)
+    assert "Data cleaning report" in text and "Did any totals change?" in text
+
+
+def test_pdf_report_without_cleaning(client):
+    fresh = client.post("/api/v1/datasets/sample").json()["dataset_id"]
+    response = client.get(f"/api/v1/datasets/{fresh}/report/pdf")
+    assert response.status_code == 200
+    from pypdf import PdfReader
+    text = "\n".join(p.extract_text() for p in PdfReader(io.BytesIO(response.content)).pages)
+    assert "No cleaning was applied" in text
