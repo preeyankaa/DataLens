@@ -34,6 +34,7 @@ import {
   Activity,
   Plus,
   Trash2,
+  FileDown,
 } from "lucide-react";
 import InteractiveChartBuilder from "../components/InteractiveChartBuilder";
 import "./ChartsPage.css";
@@ -885,6 +886,8 @@ export default function ChartsPage() {
   const [dashboard, setDashboard] = useState(null);
   const [customCharts, setCustomCharts] = useState([]);
   const [roleOverrides, setRoleOverrides] = useState({});
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -924,6 +927,57 @@ export default function ChartsPage() {
   useEffect(() => {
     fetchDashboard(false);
   }, [fetchDashboard]);
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    setPdfError("");
+
+    try {
+      const params = new URLSearchParams();
+
+      // the report follows the column choices shown on this page
+      if (Object.keys(roleOverrides).length > 0) {
+        params.set("roles", JSON.stringify(roleOverrides));
+      }
+
+      const response = await fetch(
+        `${API_URL}/api/v1/datasets/${datasetId}/report/pdf?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        let message = "Could not create the report.";
+
+        try {
+          const data = await response.json();
+          if (typeof data.detail === "string") message = data.detail;
+        } catch {
+          // keep the default message
+        }
+
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const stem = String(dataset?.filename || "dataset").replace(/\.[^.]+$/, "");
+
+      link.href = url;
+      link.download = `${stem}-datalens-report.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfError(
+        err.message === "Failed to fetch"
+          ? "Could not reach the backend."
+          : err.message || "Could not create the report."
+      );
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   useEffect(() => {
     setCustomCharts([]);
@@ -983,15 +1037,28 @@ export default function ChartsPage() {
           <p>Charts and insights generated from your dataset.</p>
         </div>
 
-        <button
-          type="button"
-          className="charts-refresh-button"
-          onClick={() => fetchDashboard(true)}
-          disabled={loading}
-        >
-          <RefreshCw size={16} className={loading ? "charts-spin" : ""} />
-          Refresh
-        </button>
+        <div className="charts-header-actions">
+          <button
+            type="button"
+            className="charts-pdf-button"
+            onClick={handleDownloadPdf}
+            disabled={pdfLoading || loading || !dashboard}
+            title="Cleaning report, key numbers, insights and all charts"
+          >
+            <FileDown size={16} />
+            {pdfLoading ? "Preparing report..." : "Download PDF report"}
+          </button>
+
+          <button
+            type="button"
+            className="charts-refresh-button"
+            onClick={() => fetchDashboard(true)}
+            disabled={loading}
+          >
+            <RefreshCw size={16} className={loading ? "charts-spin" : ""} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="charts-toolbar">
@@ -1007,6 +1074,13 @@ export default function ChartsPage() {
           </span>
         )}
       </div>
+
+      {pdfError && (
+        <div className="charts-error">
+          <AlertCircle size={18} />
+          <span>{pdfError}</span>
+        </div>
+      )}
 
       {dashboard && (
         <RolePanel

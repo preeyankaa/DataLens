@@ -1,4 +1,5 @@
 import json
+import re
 from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
@@ -6,7 +7,7 @@ from typing import Optional, List, Dict, Any
 
 import pandas as pd
 from pydantic import BaseModel, Field
-from fastapi import FastAPI, File, HTTPException, UploadFile, Body
+from fastapi import FastAPI, File, HTTPException, Query, Response, UploadFile, Body
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,6 +24,8 @@ from app.data_analysis import (
 )
 from app.trust import build_cleaning_report
 from app.codegen import generate_cleaning_code
+from app.exporter import build_csv_bytes, build_excel_bytes
+from app.report_pdf import build_pdf_report
 from app.dashboard_builder import build_dashboard_data
 from app.visualization import (
     build_visualization_data,
@@ -71,6 +74,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -79,6 +83,8 @@ app.add_middleware(
 # --------------------------------------------------
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+NON_NEGATIVE_COLUMNS = ["customer_age", "quantity"]
 
 SAMPLE_FILENAME = "datalens_sample_sales.csv"
 SAMPLE_PATH = Path(__file__).resolve().parent / "sample_data" / SAMPLE_FILENAME
@@ -189,7 +195,7 @@ def register_dataset(df, filename, load_info):
     # Run data quality checks
     quality_report = check_data_quality(
         df,
-        non_negative_columns=["customer_age", "quantity"],
+        non_negative_columns=NON_NEGATIVE_COLUMNS,
     )
 
     return {
@@ -676,16 +682,10 @@ def get_dataset_charts(
 # roles    JSON of column choices from the "Confirm columns" panel
 # refresh  true = ignore the cache and rebuild
 
-@app.get("/api/v1/datasets/{dataset_id}/dashboard")
-def get_ai_dashboard(
-    dataset_id: str,
-    version: str = "cleaned",
-    roles: Optional[str] = None,
-    refresh: bool = False,
-):
+def compute_dashboard(dataset_id, version, role_overrides, refresh=False):
+    """Build (or fetch from cache) the dashboard payload. Shared with the PDF."""
 
     df, using_cleaned = get_df(dataset_id, version)
-    role_overrides = parse_roles(roles)
 
     cache_key = (
         dataset_id,
@@ -724,6 +724,18 @@ def get_ai_dashboard(
             status_code=500,
             detail=f"Unable to generate AI dashboard: {str(error)}",
         )
+
+
+@app.get("/api/v1/datasets/{dataset_id}/dashboard")
+def get_ai_dashboard(
+    dataset_id: str,
+    version: str = "cleaned",
+    roles: Optional[str] = None,
+    refresh: bool = False,
+):
+    return compute_dashboard(
+        dataset_id, version, parse_roles(roles), refresh
+    )
 
 
 # --------------------------------------------------
@@ -768,3 +780,115 @@ def create_custom_chart(
             status_code=500,
             detail=f"Could not generate chart: {str(error)}",
         )
+
+
+# --------------------------------------------------
+# 15. Export cleaned data and the PDF report
+# --------------------------------------------------
+
+def safe_file_stem(name):
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(name or "dataset").stem)
+    return stem.strip("._")[:60] or "dataset"
+
+
+def quality_scores(dataset_id):
+    """Data quality before cleaning and (if cleaned) after."""
+
+    before = check_data_quality(
+        datasets[dataset_id], non_negative_columns=NON_NEGATIVE_COLUMNS
+    )
+    after = None
+
+    if dataset_id in cleaned_datasets:
+        after = check_data_quality(
+            cleaned_datasets[dataset_id],
+            non_negative_columns=NON_NEGATIVE_COLUMNS,
+        )
+
+    return before, after
+
+
+@app.get("/api/v1/datasets/{dataset_id}/export")
+def export_dataset(
+    dataset_id: str,
+    file_format: str = Query("xlsx", alias="format"),
+    version: str = "cleaned",
+):
+    """Download the cleaned data as Excel (with a change log) or CSV."""
+
+    df, using_cleaned = get_df(dataset_id, version)
+
+    if file_format not in ("xlsx", "csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="Format must be 'xlsx' or 'csv'.",
+        )
+
+    source = dataset_files.get(dataset_id, "dataset")
+    stem = safe_file_stem(source)
+    label = "cleaned" if using_cleaned else "original"
+
+    if file_format == "csv":
+        content = build_csv_bytes(df)
+        media_type = "text/csv; charset=utf-8"
+    else:
+        report = cleaning_reports.get(dataset_id) if using_cleaned else None
+        before, after = quality_scores(dataset_id) if report else (None, None)
+
+        content = build_excel_bytes(
+            df,
+            source,
+            using_cleaned,
+            report=report,
+            quality_before=before["quality_score"] if before else None,
+            quality_after=after["quality_score"] if after else None,
+        )
+        media_type = (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}-{label}.{file_format}"'
+        },
+    )
+
+
+@app.get("/api/v1/datasets/{dataset_id}/report/pdf")
+def download_pdf_report(
+    dataset_id: str,
+    roles: Optional[str] = None,
+):
+    """PDF with the cleaning report, KPIs, insights and every chart."""
+
+    dashboard = compute_dashboard(
+        dataset_id, "cleaned", parse_roles(roles)
+    )
+    before, after = quality_scores(dataset_id)
+
+    try:
+        pdf = build_pdf_report({
+            "filename": dataset_files.get(dataset_id, "dataset"),
+            "using_cleaned": dashboard["using_cleaned"],
+            "dashboard": dashboard,
+            "cleaning_report": cleaning_reports.get(dataset_id),
+            "quality_before": before,
+            "quality_after": after,
+        })
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to create the report: {str(error)}",
+        )
+
+    stem = safe_file_stem(dataset_files.get(dataset_id, "dataset"))
+
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}-datalens-report.pdf"'
+        },
+    )

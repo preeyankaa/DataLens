@@ -12,6 +12,7 @@ import {
   Code2,
   Undo2,
   Copy,
+  FileSpreadsheet,
 } from "lucide-react";
 import "./CleaningSteps.css";
 
@@ -258,6 +259,7 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
   const [draftError, setDraftError] = useState("");
 
   const [hasApplied, setHasApplied] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState("");
   const [code, setCode] = useState("");
   const [codeLoading, setCodeLoading] = useState(false);
@@ -837,6 +839,53 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
       setError(err.message || "Download failed.");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/v1/datasets/${datasetId}/export?format=xlsx`
+      );
+
+      if (!response.ok) {
+        let message = "Could not create the Excel file.";
+
+        try {
+          const data = await response.json();
+          if (typeof data.detail === "string") message = data.detail;
+        } catch {
+          // keep the default message
+        }
+
+        throw new Error(message);
+      }
+
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = match?.[1] || "datalens-cleaned.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setSuccess(
+        "Excel file downloaded. It has your cleaned data plus a sheet listing every change."
+      );
+    } catch (err) {
+      setError(err.message || "Download failed.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -1510,6 +1559,17 @@ function CleaningSection({ datasetId, profile, qualityReport }) {
               {downloading
                 ? "Preparing download..."
                 : "Download cleaned CSV"}
+            </button>
+
+            <button
+              className="primary-button download-cleaned-button"
+              type="button"
+              onClick={handleExportExcel}
+              disabled={exporting || !cleanedReady || applying}
+              title="Cleaned data plus a sheet listing every change"
+            >
+              <FileSpreadsheet size={18} />
+              {exporting ? "Preparing Excel..." : "Download Excel (with change log)"}
             </button>
           </div>
 
