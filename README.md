@@ -1,41 +1,42 @@
-# DataLens 📊 
+# DataLens 📊
+### AI-Powered Data Quality & Analytics Copilot
 
-**AI-Powered Data Quality & Analytics Copilot**
+DataLens is a web-based application that helps users explore, analyze, clean, and understand CSV datasets. It combines automated data profiling, data quality assessment, customizable cleaning workflows, interactive visualizations, and AI-powered analytics in one platform.
 
-DataLens is a web-based application that helps users upload, analyze, and clean CSV datasets. It provides automated dataset profiling, data quality checks, customizable cleaning operations, visual analytics, and AI-powered question answering.
+## Features
 
-## 🚀 Features
-
-- **CSV Upload & Profiling:** Analyze dataset dimensions, missing values, duplicates, data types, and column statistics.
-- **Data Quality Analysis:** Detect missing values, duplicates, outliers, and potential data inconsistencies.
-- **Data Cleaning:** Handle missing values, remove duplicates, standardize dates, convert data types, and apply outlier clipping.
-- **Cleaning Preview:** Review proposed changes before applying them.
-- **Original & Cleaned Versions:** Keep the uploaded dataset unchanged while maintaining a separate cleaned version.
-- **CSV Download:** Download the cleaned dataset.
+- **CSV Upload & Profiling:** Analyze dataset dimensions, column types, missing values, duplicates, and statistical summaries.
+- **Data Quality Assessment:** Identify missing values, duplicate records, outliers, and potential data inconsistencies.
+- **Interactive Data Cleaning:** Rename or remove columns, find and replace values, standardize text, convert data types, and filter rows using custom rules.
+- **Cleaning Preview & Undo:** Review cleaning operations before applying them and undo individual steps.
+- **Reusable Cleaning Recipes:** Save and reuse cleaning workflows across datasets.
+- **Python Code Generation:** Generate, view, copy, and download Python code corresponding to cleaning operations.
+- **Original & Cleaned Versions:** Preserve the original dataset while maintaining a separate cleaned version.
+- **CSV Export:** Download cleaned datasets.
+- **Excel Workbook Export:** Export cleaned data with cleaning logs, totals comparison, assumptions, and dataset information.
+- **PDF Analytics Reports:** Generate reports containing dataset summaries, quality comparisons, cleaning details, insights, and visualizations.
+- **Interactive Data Visualization:** Explore datasets through charts, KPIs, and analytical insights.
 - **AI-Powered Q&A:** Ask natural language questions about original and cleaned datasets using the Groq API.
-- **Data Visualization:** Explore datasets through automatically generated charts, KPIs, and analytical insights.
 
-## 🛠️ Tech Stack 
+## Tech Stack
 
-**Backend:** Python, FastAPI, Pandas, NumPy, Groq API
+| Category | Technologies |
+|---|---|
+| Backend | Python, FastAPI, Pandas, NumPy |
+| Frontend | React, JavaScript, Vite, CSS |
+| AI Integration | Groq API |
+| Visualization | Recharts, Matplotlib |
+| Data Export | ReportLab, OpenPyXL |
+| Tools | Git, GitHub, VS Code, Swagger UI |
 
-**Frontend:** React, JavaScript, Vite, CSS, Recharts, Lucide React, React Markdown
-
-**Tools:** Git, GitHub, VS Code, Swagger UI
-
-## 📁 Project Structure
+## Project Structure
 
 ```text
 DataLens/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py
-│   │   ├── profiling.py
-│   │   ├── quality.py
-│   │   ├── cleaning.py
-│   │   ├── data_analysis.py
-│   │   ├── visualization.py
-│   │   └── ai_service.py
+│   ├── tests/
+│   ├── main.py
 │   ├── requirements.txt
 │   └── .env
 │
@@ -49,13 +50,14 @@ DataLens/
 └── README.md
 ```
 
-## ⚙️ Getting Started
+## Getting Started
 
 ### Prerequisites
 
 - Python 3.10+
 - Node.js and npm
 - Git
+- Groq API key
 
 ### 1. Clone the Repository
 
@@ -71,9 +73,16 @@ cd backend
 python -m venv .venv
 ```
 
-Activate the virtual environment:
+Activate the virtual environment.
 
-**Windows:**
+**Windows (Git Bash):**
+
+```bash
+source .venv/Scripts/activate
+```
+
+**Windows (PowerShell):**
+
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
@@ -84,7 +93,7 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Create a `.env` file inside `backend/`:
+Create a `.env` file inside the `backend/` directory:
 
 ```env
 GROQ_API_KEY=your_groq_api_key
@@ -94,8 +103,10 @@ GROQ_MODEL=openai/gpt-oss-20b
 Start the backend:
 
 ```bash
-uvicorn app.main:app --reload
+python -m uvicorn main:app --reload
 ```
+
+Backend API: `http://127.0.0.1:8000`
 
 API documentation: `http://127.0.0.1:8000/docs`
 
@@ -111,26 +122,28 @@ npm run dev
 
 Open the local URL displayed in the terminal.
 
-## 🔄 Application Workflow
+## Application Workflow
 
 1. Upload a CSV dataset.
-2. Explore dataset profiles and quality reports.
-3. Review and select cleaning operations.
-4. Preview and apply cleaning.
-5. Download the cleaned dataset.
-6. Explore visual analytics and insights.
-7. Ask questions about the dataset using the AI assistant.
+2. Explore dataset profiles and data quality metrics.
+3. Identify potential data issues.
+4. Create and preview custom cleaning operations.
+5. Apply cleaning operations and review the cleaning report.
+6. Reuse cleaning recipes or export the generated Python code.
+7. Download cleaned data as CSV or Excel.
+8. Explore interactive charts and analytical insights.
+9. Generate a PDF analytics report.
+10. Ask questions about the dataset using the AI assistant.
 
-## 🗺️ Future Improvements
+## Future Improvements
 
-- Power BI-style interactive dashboard builder.
-- Advanced RAG-based dataset analysis.
 - User authentication and account management.
-- PostgreSQL integration for persistent storage.
-- AWS deployment.
+- PostgreSQL integration for persistent dataset storage.
+- AWS deployment and cloud-based file storage.
+- Advanced RAG-based dataset analysis.
 
 ---
 
 **Developed by Priyanka Bhandari**
 
-[GitHub](https://github.com/preeyankaa)
+[GitHub](https://github.com/preeyankaa) · [Portfolio](https://priyankaB-portfolio.vercel.app)
